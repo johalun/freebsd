@@ -92,6 +92,8 @@
         ..
         scsi
         ..
+        mmc
+        ..
     ..
     casper
     ..
@@ -226,7 +228,7 @@
     gssapi
     ..
     infiniband
-        complib 
+        complib
         ..
         iba
         ..

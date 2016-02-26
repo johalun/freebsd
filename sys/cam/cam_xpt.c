@@ -391,7 +391,7 @@ xptioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread *td
 	}
 	return (error);
 }
-	
+
 static int
 xptdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread *td)
 {
@@ -775,6 +775,8 @@ xpt_scanner_thread(void *dummy)
 			TAILQ_REMOVE(&xsoftc.ccb_scanq, &ccb->ccb_h, sim_links.tqe);
 			xpt_unlock_buses();
 
+                        printf("xpt_scanner_thread is firing on path ");
+                        xpt_print_path(ccb->ccb_h.path);printf("\n");
 			/*
 			 * Since lock can be dropped inside and path freed
 			 * by completion callback even before return here,
@@ -1028,6 +1030,8 @@ xpt_announce_periph(struct cam_periph *periph, char *announce_string)
 	else if (path->device->protocol == PROTO_SEMB)
 		semb_print_ident(
 		    (struct sep_identify_data *)&path->device->ident_data);
+        else if (path->device->protocol == PROTO_MMCSD)
+                mmc_print_ident(&path->device->mmc_ident_data);
 	else
 		printf("Unknown protocol device\n");
 	if (path->device->serial_num_len > 0) {
@@ -1081,6 +1085,8 @@ xpt_denounce_periph(struct cam_periph *periph)
 	else if (path->device->protocol == PROTO_SEMB)
 		semb_print_ident_short(
 		    (struct sep_identify_data *)&path->device->ident_data);
+        else if (path->device->protocol == PROTO_MMCSD)
+                mmc_print_ident(&path->device->mmc_ident_data);
 	else
 		printf("Unknown protocol device");
 	if (path->device->serial_num_len > 0)
@@ -1328,7 +1334,7 @@ xptdevicematch(struct dev_match_pattern *patterns, u_int num_patterns,
 
 		cur_pattern = &patterns[i].pattern.device_pattern;
 
-		/* Error out if mutually exclusive options are specified. */ 
+		/* Error out if mutually exclusive options are specified. */
 		if ((cur_pattern->flags & (DEV_MATCH_INQUIRY|DEV_MATCH_DEVID))
 		 == (DEV_MATCH_INQUIRY|DEV_MATCH_DEVID))
 			return(DM_RET_ERROR);
@@ -1730,6 +1736,9 @@ xptedtdevicefunc(struct cam_ed *device, void *arg)
 		bcopy(&device->ident_data,
 		      &cdm->matches[j].result.device_result.ident_data,
 		      sizeof(struct ata_params));
+		bcopy(&device->mmc_ident_data,
+		      &cdm->matches[j].result.device_result.mmc_ident_data,
+		      sizeof(struct mmc_params));
 
 		/* Let the user know whether this device is unconfigured */
 		if (device->flags & CAM_DEV_UNCONFIGURED)
@@ -2509,6 +2518,7 @@ xpt_action_default(union ccb *start_ccb)
 		if (start_ccb->ccb_h.func_code == XPT_ATA_IO)
 			start_ccb->ataio.resid = 0;
 		/* FALLTHROUGH */
+	case XPT_MMC_IO:
 	case XPT_RESET_DEV:
 	case XPT_ENG_EXEC:
 	case XPT_SMP_IO:
@@ -3638,7 +3648,7 @@ xpt_path_comp_dev(struct cam_path *path, struct cam_ed *dev)
 void
 xpt_print_path(struct cam_path *path)
 {
-
+        printf("TD %08d (%s): ", curthread->td_tid, curthread->td_name);
 	if (path == NULL)
 		printf("(nopath): ");
 	else {
@@ -3884,6 +3894,9 @@ xpt_bus_register(struct cam_sim *sim, device_t parent, u_int32_t bus)
 		case XPORT_ATA:
 		case XPORT_SATA:
 			new_bus->xport = ata_get_xport();
+			break;
+		case XPORT_MMCSD:
+			new_bus->xport = mmc_get_xport();
 			break;
 		default:
 			new_bus->xport = &xport_default;

@@ -90,6 +90,7 @@ struct cam_ed {
 	uint32_t	 rcap_len;
 	uint8_t		 *rcap_buf;
 	struct		 ata_params ident_data;
+        struct		 mmc_params mmc_ident_data;
 	u_int8_t	 inq_flags;	/*
 					 * Current settings for inquiry flags.
 					 * This allows us to override settings
@@ -167,6 +168,7 @@ struct cam_path {
 
 struct xpt_xport *	scsi_get_xport(void);
 struct xpt_xport *	ata_get_xport(void);
+struct xpt_xport *	mmc_get_xport(void);
 
 struct cam_ed *		xpt_alloc_device(struct cam_eb *bus,
 					 struct cam_et *target,

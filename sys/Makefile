@@ -56,7 +56,7 @@ cscope-hook:
 # You need the devel/global and one of editor/emacs* ports for that.
 TAGS ${.CURDIR}/TAGS: ${.CURDIR}/cscope.files
 	rm -f ${.CURDIR}/TAGS
-	cd ${.CURDIR}; xargs etags -a < ${.CURDIR}/cscope.files
+	cd ${.CURDIR}; xargs exctags -ea < ${.CURDIR}/cscope.files
 
 # You need the textproc/glimpse ports for this.
 glimpse:

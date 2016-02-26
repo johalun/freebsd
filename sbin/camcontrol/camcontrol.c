@@ -568,6 +568,13 @@ getdevtree(int argc, char **argv, char *combinedopt)
 					   sizeof(revision));
 				    sprintf(tmpstr, "<%s %s>", product,
 					revision);
+				} else if (dev_result->protocol == PROTO_MMCSD) {
+                                        if (strlen(dev_result->mmc_ident_data.model) > 0) {
+                                                sprintf(tmpstr, "<%s>", dev_result->mmc_ident_data.model);
+                                        } else {
+                                                sprintf(tmpstr, "<%s card>",
+                                                        dev_result->mmc_ident_data.card_features & CARD_FEATURE_SDIO ? "SDIO" : "unknown");
+                                        }
 				} else if (dev_result->protocol == PROTO_SEMB) {
 					struct sep_identify_data *sid;
 

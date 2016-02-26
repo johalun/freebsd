@@ -41,6 +41,7 @@
 #include <cam/cam_debug.h>
 #include <cam/scsi/scsi_all.h>
 #include <cam/ata/ata_all.h>
+#include <cam/mmc/mmc_all.h>
 
 /* General allocation length definitions for CCB structures */
 #define	IOCDBLEN	CAM_MAX_CDBLEN	/* Space for CDB bytes/pointer */
@@ -229,6 +230,8 @@ typedef enum {
 				/* Notify Host Target driver of event */
 	XPT_NOTIFY_ACKNOWLEDGE	= 0x37 | XPT_FC_QUEUED | XPT_FC_USER_CCB,
 				/* Acknowledgement of event */
+	XPT_MMC_IO		= 0x38 | XPT_FC_DEV_QUEUED,
+				/* Execute the requested MMC I/O operation */
 
 /* Vendor Unique codes: 0x80->0x8F */
 	XPT_VUNIQUE		= 0x80
@@ -255,6 +258,7 @@ typedef enum {
 	PROTO_ATAPI,	/* AT Attachment Packetized Interface */
 	PROTO_SATAPM,	/* SATA Port Multiplier */
 	PROTO_SEMB,	/* SATA Enclosure Management Bridge */
+	PROTO_MMCSD,	/* MMC, SD, SDIO */
 } cam_proto;
 
 typedef enum {
@@ -270,6 +274,7 @@ typedef enum {
 	XPORT_SATA,	/* Serial AT Attachment */
 	XPORT_ISCSI,	/* iSCSI */
 	XPORT_SRP,	/* SCSI RDMA Protocol */
+	XPORT_MMCSD,	/* MMC, SD, SDIO card */
 } cam_xport;
 
 #define XPORT_IS_ATA(t)		((t) == XPORT_ATA || (t) == XPORT_SATA)
@@ -482,6 +487,7 @@ struct device_match_result {
 	cam_proto			protocol;
 	struct scsi_inquiry_data	inq_data;
 	struct ata_params		ident_data;
+        struct mmc_params               mmc_ident_data;
 	dev_result_flags		flags;
 };
 
@@ -745,6 +751,16 @@ struct ccb_ataio {
 	u_int	   init_id;		/* initiator id of who selected */
 };
 
+/*
+ * MMC I/O Request CCB used for the XPT_MMC_IO function code.
+ */
+struct ccb_mmcio {
+	struct	   ccb_hdr ccb_h;
+	union	   ccb *next_ccb;	/* Ptr for next CCB for action */
+	struct mmc_command cmd;
+        struct mmc_command stop;
+};
+
 struct ccb_accept_tio {
 	struct	   ccb_hdr ccb_h;
 	cdb_t	   cdb_io;		/* Union for CDB bytes/pointer */
@@ -946,6 +962,26 @@ struct ccb_trans_settings_sata {
 #define	CTS_SATA_CAPS_D_APST		0x00020000
 };
 
+/*
+ * Basically, what earlier was done with updating IOS
+ * now can be done using SET_TRAN_SETTINGS
+ */
+#include <cam/mmc/mmc_bus.h>
+struct ccb_trans_settings_mmc {
+	struct mmc_ios ios;
+#define MMC_CLK		(1 << 1)
+#define MMC_VDD		(1 << 2)
+#define MMC_CS		(1 << 3)
+#define MMC_BW		(1 << 4)
+#define MMC_PM		(1 << 5)
+#define MMC_BT		(1 << 6)
+#define MMC_BM		(1 << 7)
+	uint32_t ios_valid;
+
+/* The folowing is used only for GET_TRAN_SETTINGS */
+	uint32_t	host_ocr;
+};
+
 /* Get/Set transfer rate/width/disconnection/tag queueing settings */
 struct ccb_trans_settings {
 	struct	  ccb_hdr ccb_h;
@@ -958,6 +994,7 @@ struct ccb_trans_settings {
 		u_int  valid;	/* Which fields to honor */
 		struct ccb_trans_settings_ata ata;
 		struct ccb_trans_settings_scsi scsi;
+		struct ccb_trans_settings_mmc mmc;
 	} proto_specific;
 	union {
 		u_int  valid;	/* Which fields to honor */
@@ -1211,6 +1248,7 @@ union ccb {
 	struct	ccb_ataio		ataio;
 	struct	ccb_dev_advinfo		cdai;
 	struct	ccb_async		casync;
+	struct	ccb_mmcio		mmcio;
 };
 
 __BEGIN_DECLS

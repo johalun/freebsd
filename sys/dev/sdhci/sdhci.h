@@ -286,7 +286,10 @@ struct sdhci_slot {
 	struct mmc_host host;		/* Host parameters */
 	struct mmc_request *req;	/* Current request */
 	struct mmc_command *curcmd;	/* Current command of current request */
-	
+
+	/* CAM stuff */
+	union ccb	*ccb;
+
 	uint32_t	intmask;	/* Current interrupt mask */
 	uint32_t	clock;		/* Current clock freq. */
 	size_t		offset;		/* Data buffer offset */
@@ -320,4 +323,7 @@ int sdhci_generic_release_host(device_t brdev, device_t reqdev);
 void sdhci_generic_intr(struct sdhci_slot *slot);
 uint32_t sdhci_generic_min_freq(device_t brdev, struct sdhci_slot *slot);
 
+/* CAM-related */
+int sdhci_update_ios_cam(struct sdhci_slot *slot);
+int sdhci_request_cam(struct sdhci_slot *slot, union ccb *ccb);
 #endif	/* __SDHCI_H__ */
