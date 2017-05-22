@@ -76,6 +76,11 @@ struct in_addr_4in6 {
 	struct	in_addr	ia46_addr4;
 };
 
+union in_dependaddr {
+	struct in_addr_4in6 id46_addr;
+	struct in6_addr	id6_addr;
+};
+
 /*
  * NOTE: ipv6 addrs should be 64-bit aligned, per RFC 2553.  in_conninfo has
  * some extra padding to accomplish this.
@@ -86,22 +91,28 @@ struct in_endpoints {
 	u_int16_t	ie_fport;		/* foreign port */
 	u_int16_t	ie_lport;		/* local port */
 	/* protocol dependent part, local and foreign addr */
-	union {
-		/* foreign host table entry */
-		struct	in_addr_4in6 ie46_foreign;
-		struct	in6_addr ie6_foreign;
-	} ie_dependfaddr;
-	union {
-		/* local host table entry */
-		struct	in_addr_4in6 ie46_local;
-		struct	in6_addr ie6_local;
-	} ie_dependladdr;
+	/* union { */
+	/* 	/\* foreign host table entry *\/ */
+	/* 	struct	in_addr_4in6 ie46_foreign; */
+	/* 	struct	in6_addr ie6_foreign; */
+	/* } ie_dependfaddr; */
+	/* union { */
+	/* 	/\* local host table entry *\/ */
+	/* 	struct	in_addr_4in6 ie46_local; */
+	/* 	struct	in6_addr ie6_local; */
+	/* } ie_dependladdr; */
+	union in_dependaddr ie_dependfaddr;	/* foreign host table entry */
+	union in_dependaddr ie_dependladdr;	/* local host table entry */
+#define	ie_faddr	ie_dependfaddr.id46_addr.ia46_addr4
+#define	ie_laddr	ie_dependladdr.id46_addr.ia46_addr4
+#define	ie6_faddr	ie_dependfaddr.id6_addr
+#define	ie6_laddr	ie_dependladdr.id6_addr
 	u_int32_t	ie6_zoneid;		/* scope zone id */
 };
-#define	ie_faddr	ie_dependfaddr.ie46_foreign.ia46_addr4
-#define	ie_laddr	ie_dependladdr.ie46_local.ia46_addr4
-#define	ie6_faddr	ie_dependfaddr.ie6_foreign
-#define	ie6_laddr	ie_dependladdr.ie6_local
+/* #define	ie_faddr	ie_dependfaddr.ie46_foreign.ia46_addr4 */
+/* #define	ie_laddr	ie_dependladdr.ie46_local.ia46_addr4 */
+/* #define	ie6_faddr	ie_dependfaddr.ie6_foreign */
+/* #define	ie6_laddr	ie_dependladdr.ie6_local */
 
 /*
  * XXX The defines for inc_* are hacks and should be changed to direct
@@ -326,6 +337,28 @@ struct inpcbport {
 	u_short phd_port;
 };
 
+struct inpcblocalgroup {
+	LIST_ENTRY(inpcblocalgroup) il_list;
+	uint16_t	il_lport;
+	u_char		il_vflag;
+	u_char		il_pad;
+	uint32_t	il_factor;
+	union in_dependaddr il_dependladdr;
+#define il_laddr	il_dependladdr.id46_addr.ia46_addr4
+#define il6_laddr	il_dependladdr.id6_addr
+	uint32_t    il_inpcur; /* current index in round robin */
+	uint32_t	il_inpsiz; /* size of il_inp[] */
+	uint32_t	il_inpcnt; /* # of elem in il_inp[] */
+	/*
+	 * Variable array to group pcbs by addr and port, used for 
+	 * SO_REUSEPORT_XX extension options. 
+	 * Jailed sockets and wildcard IPv4 mapped INET6 sockets
+	 * will not be added to the array.
+	 */
+	struct inpcb	*il_inp[];
+};
+LIST_HEAD(inpcblocalgrouphead, inpcblocalgroup);
+
 /*-
  * Global data structure for each high-level protocol (UDP, TCP, ...) in both
  * IPv4 and IPv6.  Holds inpcb lists and information for managing them.
@@ -419,6 +452,13 @@ struct inpcbinfo {
 	u_long			 ipi_wildmask;		/* (p) */
 
 	/*
+	 * Local group used for socket load balancing (SO_REUSEPORT_XX), 
+	 * hashed by local address and local port.
+	 */
+	struct	inpcblocalgrouphead *ipi_localgrouphashbase;
+	u_long	ipi_localgrouphashmask;
+
+	/*
 	 * Pointer to network stack instance
 	 */
 	struct vnet		*ipi_vnet;		/* (c) */
@@ -504,7 +544,7 @@ struct tcpcb *
 	inp_inpcbtotcpcb(struct inpcb *inp);
 void 	inp_4tuple_get(struct inpcb *inp, uint32_t *laddr, uint16_t *lp,
 		uint32_t *faddr, uint16_t *fp);
-short	inp_so_options(const struct inpcb *inp);
+int		inp_so_options(const struct inpcb *inp);
 
 #endif /* _KERNEL */
 
@@ -567,6 +607,8 @@ short	inp_so_options(const struct inpcb *inp);
 	(((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport))) & (mask))
 #define INP_PCBPORTHASH(lport, mask) \
 	(ntohs((lport)) & (mask))
+#define INP_PCBLOCALGROUPHASH(lport, mask) \
+	(ntohs((lport)) & (mask))
 #define	INP6_PCBHASHKEY(faddr)	((faddr)->s6_addr32[3])
 
 /*
@@ -626,7 +668,7 @@ short	inp_so_options(const struct inpcb *inp);
 #define	INP_RT_VALID		0x00000002 /* cached rtentry is valid */
 #define	INP_PCBGROUPWILD	0x00000004 /* in pcbgroup wildcard list */
 #define	INP_REUSEPORT		0x00000008 /* SO_REUSEPORT option is set */
-#define	INP_FREED		0x00000010 /* inp itself is not valid */
+#define	INP_FREED			0x00000010 /* inp itself is not valid */
 #define	INP_REUSEADDR		0x00000020 /* SO_REUSEADDR option is set */
 #define	INP_BINDMULTI		0x00000040 /* IP_BINDMULTI option is set */
 #define	INP_RSS_BUCKET_SET	0x00000080 /* IP_RSS_LISTEN_BUCKET is set */
@@ -634,6 +676,7 @@ short	inp_so_options(const struct inpcb *inp);
 #define	INP_RECVRSSBUCKETID	0x00000200 /* populate recv datagram with bucket id */
 #define	INP_RATE_LIMIT_CHANGED	0x00000400 /* rate limit needs attention */
 #define	INP_ORIGDSTADDR		0x00000800 /* receive IP dst address/port */
+#define	INP_REUSEPORT_RR	0x00001000 /* SO_REUSEPORT_RR option is set */
 
 /*
  * Flags passed to in_pcblookup*() functions.
@@ -642,8 +685,10 @@ short	inp_so_options(const struct inpcb *inp);
 #define	INPLOOKUP_RLOCKPCB	0x00000002	/* Return inpcb read-locked. */
 #define	INPLOOKUP_WLOCKPCB	0x00000004	/* Return inpcb write-locked. */
 
+#define	INPLOOKUP_LOCALGROUP	0x00000008
+
 #define	INPLOOKUP_MASK	(INPLOOKUP_WILDCARD | INPLOOKUP_RLOCKPCB | \
-			    INPLOOKUP_WLOCKPCB)
+			    INPLOOKUP_WLOCKPCB | INPLOOKUP_LOCALGROUP)
 
 #define	sotoinpcb(so)	((struct inpcb *)(so)->so_pcb)
 #define	sotoin6pcb(so)	sotoinpcb(so) /* for KAME src sync over BSD*'s */

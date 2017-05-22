@@ -70,12 +70,12 @@ struct socket;
  * (h) locked by global mutex so_global_mtx.
  */
 struct socket {
-	int	so_count;		/* (b) reference count */
+	int		so_count;		/* (b) reference count */
 	short	so_type;		/* (a) generic type, see socket.h */
-	short	so_options;		/* from socket call, see socket.h */
+	int		so_options;		/* from socket call, see socket.h */
 	short	so_linger;		/* time to linger while closing */
 	short	so_state;		/* (b) internal state flags SS_* */
-	int	so_qstate;		/* (e) internal state flags SQ_* */
+	int		so_qstate;		/* (e) internal state flags SQ_* */
 	void	*so_pcb;		/* protocol control block */
 	struct	vnet *so_vnet;		/* (a) network stack instance */
 	struct	protosw *so_proto;	/* (a) protocol handle */
@@ -170,12 +170,12 @@ struct xsocket {
 	size_t	xso_len;	/* length of this structure */
 	struct	socket *xso_so;	/* makes a convenient handle sometimes */
 	short	so_type;
-	short	so_options;
+	int		so_options;
 	short	so_linger;
 	short	so_state;
 	caddr_t	so_pcb;		/* another convenient handle */
-	int	xso_protocol;
-	int	xso_family;
+	int		xso_protocol;
+	int		xso_family;
 	u_int	so_qlen;
 	u_int	so_incqlen;
 	u_int	so_qlimit;
