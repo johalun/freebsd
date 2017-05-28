@@ -209,6 +209,11 @@ int
 ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
     struct ip_moptions *imo, struct inpcb *inp)
 {
+	printf("%s] \n", __func__);
+	/* print_ip(ip->ip_src.s_addr); */
+	/* printf(" -> "); */
+	/* print_ip(ip->ip_dst.s_addr); */
+	/* printf("\n"); */
 	struct rm_priotracker in_ifa_tracker;
 	struct ip *ip;
 	struct ifnet *ifp = NULL;	/* keep compiler happy */
@@ -993,12 +998,12 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
 				INP_WUNLOCK(inp);
 				error = 0;
 				break;
-			case SO_REUSEPORT_RR:
+			case SO_REUSEPORT_LB:
 				INP_WLOCK(inp);
-				if ((so->so_options & SO_REUSEPORT_RR) != 0)
-					inp->inp_flags2 |= INP_REUSEPORT_RR;
+				if ((so->so_options & SO_REUSEPORT_LB) != 0)
+					inp->inp_flags2 |= INP_REUSEPORT_LB;
 				else
-					inp->inp_flags2 &= ~INP_REUSEPORT_RR;
+					inp->inp_flags2 &= ~INP_REUSEPORT_LB;
 				INP_WUNLOCK(inp);
 				error = 0;
 				break;

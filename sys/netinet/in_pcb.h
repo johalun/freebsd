@@ -607,8 +607,10 @@ int		inp_so_options(const struct inpcb *inp);
 	(((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport))) & (mask))
 #define INP_PCBPORTHASH(lport, mask) \
 	(ntohs((lport)) & (mask))
-#define INP_PCBLOCALGROUPHASH(lport, mask) \
+#define INP_PCBLOCALGROUP_PORTHASH(lport, mask) \
 	(ntohs((lport)) & (mask))
+#define INP_PCBLOCALGROUP_PKTHASH(faddr, lport, fport) \
+	((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport)))
 #define	INP6_PCBHASHKEY(faddr)	((faddr)->s6_addr32[3])
 
 /*
@@ -676,7 +678,7 @@ int		inp_so_options(const struct inpcb *inp);
 #define	INP_RECVRSSBUCKETID	0x00000200 /* populate recv datagram with bucket id */
 #define	INP_RATE_LIMIT_CHANGED	0x00000400 /* rate limit needs attention */
 #define	INP_ORIGDSTADDR		0x00000800 /* receive IP dst address/port */
-#define	INP_REUSEPORT_RR	0x00001000 /* SO_REUSEPORT_RR option is set */
+#define	INP_REUSEPORT_LB	0x00001000 /* SO_REUSEPORT_LB option is set */
 
 /*
  * Flags passed to in_pcblookup*() functions.
@@ -685,10 +687,8 @@ int		inp_so_options(const struct inpcb *inp);
 #define	INPLOOKUP_RLOCKPCB	0x00000002	/* Return inpcb read-locked. */
 #define	INPLOOKUP_WLOCKPCB	0x00000004	/* Return inpcb write-locked. */
 
-#define	INPLOOKUP_LOCALGROUP	0x00000008
-
 #define	INPLOOKUP_MASK	(INPLOOKUP_WILDCARD | INPLOOKUP_RLOCKPCB | \
-			    INPLOOKUP_WLOCKPCB | INPLOOKUP_LOCALGROUP)
+			    INPLOOKUP_WLOCKPCB)
 
 #define	sotoinpcb(so)	((struct inpcb *)(so)->so_pcb)
 #define	sotoin6pcb(so)	sotoinpcb(so) /* for KAME src sync over BSD*'s */

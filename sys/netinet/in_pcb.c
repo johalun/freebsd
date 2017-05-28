@@ -234,14 +234,17 @@ inpcblocalgroup_alloc(struct inpcblocalgrouphead *hdr, u_char vflag,
 	grp->il_inpsiz = size;
 	LIST_INSERT_HEAD(hdr, grp, il_list);
 
-	//printf("%s] group: %p. size: %d. port %d\n", __func__, grp, size, ntohs(port));
+	// XXX what is depend addr?
+	printf("%s] group: %p. size: %d. port %d. depend addr ", __func__, grp, size, ntohs(port));
+	print_ip(addr->id46_addr.ia46_addr4.s_addr);
+	printf("\n");
 	return grp;
 }
 
 static void
 inpcblocalgroup_free(struct inpcblocalgroup *grp)
 {
-	//printf("%s] group: %p\n", __func__, grp);
+	/* printf("%s] group: %p\n", __func__, grp); */
 	LIST_REMOVE(grp, il_list);
 	free(grp, M_TEMP);
 }
@@ -270,13 +273,36 @@ inpcblocalgroup_resize(struct inpcblocalgrouphead *hdr,
 	return grp;
 }
 
+static void
+inp_localgroup_factor(struct inpcblocalgroup *grp)
+{
+	
+	int ncpus2_shift = 0; // XXX: Get real value for this?
+
+	grp->il_factor =
+		((uint32_t)(0xffff >> ncpus2_shift) / grp->il_inpcnt) + 1;
+
+	printf("%s] Calculated il_factor %d\n", __func__, grp->il_factor);
+	
+	KASSERT(grp->il_factor != 0, ("invalid local group factor, "
+								  "ncpus2_shift %d, inpcnt %d", ncpus2_shift, grp->il_inpcnt));
+}
+
 /*
  * Add PCB to local group 
  */
 static void
 in_pcbinslocalgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 {
-	//printf("%s] inpcb: %p\n", __func__, inp);
+	/* printf("%s] inpcb: %p\n", __func__, inp); */
+
+	printf("%s] laddr ", __func__);
+	print_ip(inp->inp_laddr.s_addr);
+	printf(" lport %d\n", ntohs(inp->inp_lport));
+
+	printf("%s] faddr ", __func__);
+	print_ip(inp->inp_faddr.s_addr);
+	printf(" fport %d\n", ntohs(inp->inp_fport));
 
 	struct inpcblocalgrouphead *hdr;
 	/* int n = pcbinfo->ipi_localgrouphashmask; // items in hash table */
@@ -292,17 +318,17 @@ in_pcbinslocalgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 	struct inpcblocalgroup *grp;
 	uint16_t hashmask = pcbinfo->ipi_localgrouphashmask;
 	uint16_t lport = inp->inp_lport;
-	uint32_t index = INP_PCBLOCALGROUPHASH(lport, hashmask);
-	hdr = &pcbinfo->ipi_localgrouphashbase[index];
+	uint32_t group_index = INP_PCBLOCALGROUP_PORTHASH(lport, hashmask);
+	hdr = &pcbinfo->ipi_localgrouphashbase[group_index];
 
-	//printf("%s] got header index %d for port %d. hashmask %d\n", __func__, index, ntohs(lport), hashmask);
+	printf("%s] got header index %d for port %d. hashmask %d\n", __func__, group_index, ntohs(lport), hashmask);
 
 	if(LIST_EMPTY(hdr)) {
-		//printf("%s] this group is empty\n", __func__);		
+		printf("%s] this group is empty\n", __func__);		
 	} 
 	
 	LIST_FOREACH(grp, hdr, il_list) {
-		//printf("%s] for each entry in group index %d. got grp %p port %d\n", __func__, index, grp, ntohs(grp->il_lport));
+		printf("%s] for each entry in group index %d. got grp %p port %d\n", __func__, group_index, grp, ntohs(grp->il_lport));
 	}
 	
 	/* return; */
@@ -338,22 +364,23 @@ in_pcbinslocalgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 #endif
 
 	hdr = &pcbinfo->ipi_localgrouphashbase[
-	    INP_PCBLOCALGROUPHASH(inp->inp_lport, pcbinfo->ipi_localgrouphashmask)];
+	    INP_PCBLOCALGROUP_PORTHASH(inp->inp_lport, pcbinfo->ipi_localgrouphashmask)];
 
 	LIST_FOREACH(grp, hdr, il_list) {
-		//printf("%s] (later) for each entry in group\n", __func__);
+		printf("%s] for each entry in group matching. grp vflag %d. inp vflag %d.\n",
+			   __func__, grp->il_vflag, inp->inp_vflag);
 		if (grp->il_vflag == inp->inp_vflag &&
 		    grp->il_lport == inp->inp_lport &&
 		    memcmp(&grp->il_dependladdr,
 		        &inp->inp_inc.inc_ie.ie_dependladdr,
 		        sizeof(grp->il_dependladdr)) == 0) {
-			//printf("%s] (later) got match\n", __func__);
+			printf("%s] got group match\n", __func__);
 			break;
 		}
 	}
 	if (grp == NULL) {
 		/* Create new local group */
-		//printf("%s] (later) no match, create new group\n", __func__);
+		printf("%s] no match, create new group\n", __func__);
 		grp = inpcblocalgroup_alloc(hdr, inp->inp_vflag,
 		    inp->inp_lport, &inp->inp_inc.inc_ie.ie_dependladdr,
 		    INPCBLOCALGROUP_SIZMIN);
@@ -379,9 +406,10 @@ in_pcbinslocalgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 	    ("invalid local group size %d and count %d",
 	     grp->il_inpsiz, grp->il_inpcnt));
 
-	//printf("inp adding inpcb %p to slot %d, increase count by 1\n", inp, grp->il_inpcnt);	
+	printf("%s] inp adding inpcb %p to group %p, slot %d, increase count by 1\n", __func__, inp, grp, grp->il_inpcnt);	
 	grp->il_inp[grp->il_inpcnt] = inp;  
 	grp->il_inpcnt++;
+	inp_localgroup_factor(grp);
 }
 
 static void
@@ -395,7 +423,7 @@ in_pcbremlocalgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 		return;
 
 	hdr = &pcbinfo->ipi_localgrouphashbase[
-	    INP_PCBLOCALGROUPHASH(inp->inp_lport, pcbinfo->ipi_localgrouphashmask)];
+	    INP_PCBLOCALGROUP_PORTHASH(inp->inp_lport, pcbinfo->ipi_localgrouphashmask)];
 
 	LIST_FOREACH(grp, hdr, il_list) {
 		int i;
@@ -406,6 +434,7 @@ in_pcbremlocalgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 
 			if (grp->il_inpcnt == 1) {
 				/* Free this local group */
+				printf("%s] removing index: %d (removing group)\n", __func__, i);
 				inpcblocalgroup_free(grp);
 			} else {
 				printf("%s] removing index: %d\n", __func__, i);
@@ -436,7 +465,7 @@ in_pcbinfo_init(struct inpcbinfo *pcbinfo, const char *name,
     char *inpcbzone_name, uma_init inpcbzone_init, uma_fini inpcbzone_fini,
     uint32_t inpcbzone_flags, u_int hashfields)
 {
-	//printf("%s] name: %s. porthash: %d, hash %d\n", __func__, name, porthash_nelements, hash_nelements);
+	/* printf("%s] name: %s. porthash: %d, hash %d\n", __func__, name, porthash_nelements, hash_nelements); */
 	//printf("%s] name: %s. porthash: %d, hash %d\n", __func__, name, porthash_nelements, hash_nelements);
 
 	INP_INFO_LOCK_INIT(pcbinfo, name);
@@ -497,7 +526,7 @@ in_pcbinfo_destroy(struct inpcbinfo *pcbinfo)
 int
 in_pcballoc(struct socket *so, struct inpcbinfo *pcbinfo)
 {
-	//printf("%s] inpcbinfo: %p\n", __func__, pcbinfo);
+	printf("%s] socket %p\n", __func__, so);
 	struct inpcb *inp;
 	int error;
 
@@ -731,8 +760,8 @@ inp_so_options(const struct inpcb *inp)
 
 	so_options = 0;
 
-	if ((inp->inp_flags2 & INP_REUSEPORT_RR) != 0)
-		so_options |= SO_REUSEPORT_RR;
+	if ((inp->inp_flags2 & INP_REUSEPORT_LB) != 0)
+		so_options |= SO_REUSEPORT_LB;
 	if ((inp->inp_flags2 & INP_REUSEPORT) != 0)
 		so_options |= SO_REUSEPORT;
 	if ((inp->inp_flags2 & INP_REUSEADDR) != 0)
@@ -786,7 +815,7 @@ int
 in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
     u_short *lportp, struct ucred *cred)
 {
-	//printf("%s] inpcb: %p\n", __func__, inp);
+	printf("%s] inpcb: %p\n", __func__, inp);
 	struct socket *so = inp->inp_socket;
 	struct sockaddr_in *sin;
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
@@ -795,7 +824,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 	int error;
 	int lookupflags = 0;
 	int reuseport = (so->so_options & SO_REUSEPORT);
-	int reuseport_rr = (so->so_options & SO_REUSEPORT_RR);
+	int reuseport_lb = (so->so_options & SO_REUSEPORT_LB);
 
 	//printf("%s] got so_options: %#010x. reuseport=%#010x. reuseport_rr=%#010x\n",
 			/* __func__, so->so_options,reuseport,reuseport_rr); */
@@ -814,8 +843,6 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 		return (EINVAL);
 	if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT)) == 0)
 		lookupflags = INPLOOKUP_WILDCARD;
-	if (reuseport_rr)
-		lookupflags = INPLOOKUP_LOCALGROUP;
 	if (nam == NULL) {
 		if ((error = prison_local_ip4(cred, &laddr)) != 0)
 			return (error);
@@ -850,7 +877,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 			 * and a multicast address is bound on both
 			 * new and duplicated sockets.
 			 */
-			if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT)) != 0 || reuseport_rr)
+			if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT)) != 0 || reuseport_lb)
 				reuseport = SO_REUSEADDR|SO_REUSEPORT;
 		} else if (sin->sin_addr.s_addr != INADDR_ANY) {
 			bzero(&sin->sin_zero, sizeof(sin->sin_zero));
@@ -926,7 +953,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 				}
 			} else if (t &&
 			    ((inp->inp_flags2 & INP_BINDMULTI) == 0) &&
-			    (reuseport & inp_so_options(t)) == 0 && reuseport_rr == 0) {
+			    (reuseport & inp_so_options(t)) == 0 && reuseport_lb == 0) {
 #ifdef INET6
 				if (ntohl(sin->sin_addr.s_addr) !=
 				    INADDR_ANY ||
@@ -972,7 +999,7 @@ int
 in_pcbconnect_mbuf(struct inpcb *inp, struct sockaddr *nam,
     struct ucred *cred, struct mbuf *m)
 {
-	//printf("%s] inpcb: %p\n", __func__, inp);
+	printf("%s] inpcb: %p\n", __func__, inp);
 	u_short lport, fport;
 	in_addr_t laddr, faddr;
 	int anonport, error;
@@ -1266,7 +1293,7 @@ in_pcbconnect_setup(struct inpcb *inp, struct sockaddr *nam,
     in_addr_t *laddrp, u_short *lportp, in_addr_t *faddrp, u_short *fportp,
     struct inpcb **oinpp, struct ucred *cred)
 {
-	//printf("%s] inpcb: %p\n", __func__, inp);
+	printf("%s] inpcb: %p\n", __func__, inp);
 	struct rm_priotracker in_ifa_tracker;
 	struct sockaddr_in *sin = (struct sockaddr_in *)nam;
 	struct in_ifaddr *ia;
@@ -1362,24 +1389,27 @@ in_pcbconnect_setup(struct inpcb *inp, struct sockaddr *nam,
 		if (oinpp != NULL)
 			*oinpp = oinp;
 		so_options = inp_so_options(oinp);
-		//printf("%s] so_options: %#010x. check %d \n", __func__, so_options, (so_options & SO_REUSEPORT_RR));
+		printf("%s] so_options: %#010x. check LB opt %d \n", __func__, so_options, (so_options & SO_REUSEPORT_LB));
 
-		// Check if match, increase round robin index
-		if(so_options & SO_REUSEPORT_RR) {
-			const struct inpcblocalgrouphead *hdr;
-			struct inpcblocalgroup *grp;
+		/* // XXX Check if match, increase round robin index */
+		if(so_options & SO_REUSEPORT_LB) {
+		/* 	const struct inpcblocalgrouphead *hdr; */
+		/* 	struct inpcblocalgroup *grp; */
 			
-			hdr = &inp->inp_pcbinfo->ipi_localgrouphashbase[
-				   INP_PCBLOCALGROUPHASH(lport, inp->inp_pcbinfo->ipi_localgrouphashmask)];
+		/* 	hdr = &inp->inp_pcbinfo->ipi_localgrouphashbase[ */
+		/* 		   INP_PCBLOCALGROUP_PORTHASH(lport, inp->inp_pcbinfo->ipi_localgrouphashmask)]; */
 
-			LIST_FOREACH(grp, hdr, il_list) {
-				if (grp->il_lport == lport) {
-					//printf("%s] Increasing RR index to %d\n", __func__, grp->il_inpcur+1);
-					grp->il_inpcur++;
-				}
-			}
+		/* 	LIST_FOREACH(grp, hdr, il_list) { */
+		/* 		if (grp->il_lport == lport && grp->il_laddr.s_addr == laddr.s_addr) { */
+		/* 			printf("%s] Found matching group for port %d and address ", __func__, ntohs(lport)); */
+		/* 			print_ip(laddr.s_addr); */
+		/* 			printf("\n"); */
+		/* 			printf("%s] Increasing RR index to %d\n", __func__, grp->il_inpcur+1); */
+		/* 			grp->il_inpcur++; */
+		/* 		} */
+		/* 	} */
 		} else {
-			//printf("%s] return EADDRINUSE\n", __func__);
+			printf("%s] return EADDRINUSE\n", __func__);
 			return (EADDRINUSE);
 		}
 	}
@@ -1399,6 +1429,7 @@ in_pcbconnect_setup(struct inpcb *inp, struct sockaddr *nam,
 void
 in_pcbdisconnect(struct inpcb *inp)
 {
+	printf("%s] inpcb: %p\n", __func__, inp);
 
 	INP_WLOCK_ASSERT(inp);
 	INP_HASH_WLOCK_ASSERT(inp->inp_pcbinfo);
@@ -1784,7 +1815,10 @@ in_pcblookup_local(struct inpcbinfo *pcbinfo, struct in_addr laddr,
 	int matchwild = 3;
 #endif
 	int wildcard;
-	/* printf("%s] pcbinfo: %p\n", __func__, pcbinfo); */
+
+	printf("%s] laddr ", __func__);
+	print_ip(laddr.s_addr);
+	printf(". lport %d\n", ntohs(lport));
 
 	KASSERT((lookupflags & ~(INPLOOKUP_WILDCARD)) == 0,
 	    ("%s: invalid lookup flags %d", __func__, lookupflags));
@@ -1813,13 +1847,16 @@ in_pcblookup_local(struct inpcbinfo *pcbinfo, struct in_addr laddr,
 				 */
 				if (cred == NULL ||
 				    prison_equal_ip4(cred->cr_prison,
-					inp->inp_cred->cr_prison))
+					  inp->inp_cred->cr_prison)) {
+					printf("%s] lport %d. wildcard found, returning inp %p\n", __func__, ntohs(lport), inp);
 					return (inp);
+			   }
 			}
 		}
 		/*
 		 * Not found.
 		 */
+		printf("%s] lport %d. wildcard not found, returning NULL\n", __func__, ntohs(lport));
 		return (NULL);
 	} else {
 		struct inpcbporthead *porthash;
@@ -1887,6 +1924,7 @@ in_pcblookup_local(struct inpcbinfo *pcbinfo, struct in_addr laddr,
 				}
 			}
 		}
+		printf("%s] lport %d. returning match inp %p\n", __func__, ntohs(lport), match);
 		return (match);
 	}
 }
@@ -1894,21 +1932,22 @@ in_pcblookup_local(struct inpcbinfo *pcbinfo, struct in_addr laddr,
 
 
 static struct inpcb *
-inpcblocalgroup_lookup(const struct inpcbinfo *pcbinfo,
-					 struct in_addr laddr, uint16_t lport)
+inpcblocalgroup_lookup(const struct inpcbinfo *pcbinfo, const struct in_addr *laddr, uint16_t lport,
+					   const struct in_addr *faddr, uint16_t fport, int lookupflags)
 {
-	/* printf("%s] pcbinfo: %p, port %d\n", __func__, pcbinfo, ntohs(lport)); */
+	printf("%s] port %d\n", __func__, ntohs(lport));
 	struct inpcb *local_wild = NULL;
 	const struct inpcblocalgrouphead *hdr;
 	struct inpcblocalgroup *grp;
+	struct inpcblocalgroup *grp_local_wild;
 
 	hdr = &pcbinfo->ipi_localgrouphashbase[
-		  INP_PCBLOCALGROUPHASH(lport, pcbinfo->ipi_localgrouphashmask)];
+		  INP_PCBLOCALGROUP_PORTHASH(lport, pcbinfo->ipi_localgrouphashmask)];
 
 	/*
 	 * Order of socket selection:
 	 * 1. non-wild.
-	 * 2. wild.
+	 * 2. wild (if lookupflags contains INPLOOKUP_WILDCARD).
 	 *
 	 * NOTE:
 	 * - Local group does not contain jailed sockets
@@ -1921,43 +1960,63 @@ inpcblocalgroup_lookup(const struct inpcbinfo *pcbinfo,
 	/* printf("%s] groups in hash table entry for port %d: %d\n", __func__, ntohs(lport), elements); */
 	
 	LIST_FOREACH(grp, hdr, il_list) {
-		/* printf("%s] foreach header in hashtable for port hash %lu\n", __func__, INP_PCBLOCALGROUPHASH(lport, pcbinfo->ipi_localgrouphashmask)); */
+		/* printf("%s] foreach header in hashtable for port hash %lu\n", __func__, INP_PCBLOCALGROUP_PORTHASH(lport, pcbinfo->ipi_localgrouphashmask)); */
 #ifdef INET6
 		if (!(grp->il_vflag & INP_IPV4))
 			continue;
 #endif
-		/* printf("%s] inps in group: %d\n", __func__, grp->il_inpcnt); */
+		printf("%s] inps in group: %d\n", __func__, grp->il_inpcnt);
+
 		if (grp->il_lport == lport) {
-			/* printf("%s] got match on port %d\n", __func__, ntohs(lport)); */
+
+			
+			printf("%s] got match on port %d\n", __func__, ntohs(lport));
 			uint32_t idx = 0;
 
-			// Crash when grp->il_inpcnt=0...
-			if(grp->il_inpcnt > 0)
-				idx = grp->il_inpcur % grp->il_inpcnt;
+			int pkt_hash = INP_PCBLOCALGROUP_PKTHASH(faddr->s_addr, lport, fport);
 
-			if(grp->il_inpcnt == 0) {
-				printf("%s] ====================> inpcnt = 0 on port %d (should never be here...)\n", __func__, ntohs(lport));
-			}
+			printf("%s] pkt hash is %d\n", __func__, pkt_hash);
 			
-			KASSERT(idx < grp->il_inpcnt && idx >= 0,
-					("invalid hash index %d with count %d",
-					 idx, grp->il_inpcnt));
+			/* // Crash when grp->il_inpcnt=0... */
+			/* if(grp->il_inpcnt > 0) */
+			/* 	idx = grp->il_inpcur % grp->il_inpcnt; */
 
-			if (grp->il_laddr.s_addr == laddr.s_addr) {
-				/* printf("%s] returning found match on port & address index: %d. pcb: %p\n", */
-						/* __func__, idx, grp->il_inp[idx]); */
+			/* if(grp->il_inpcnt == 0) { */
+			/* 	printf("%s] ====================> inpcnt = 0 on port %d (should never be here...)\n", __func__, ntohs(lport)); */
+			/* } */
+
+			idx = pkt_hash % grp->il_inpcnt;
+				
+			KASSERT(idx >= 0 && idx < grp->il_inpcnt,
+					("invalid hash index %d with count %d and factor %d",
+					 pkt_hash, grp->il_inpcnt, grp->il_factor));
+
+			/* if (grp->il_laddr.s_addr == laddr.s_addr) */
+			/* 	return grp->il_inp[idx]; */
+			/* else if (grp->il_laddr.s_addr == INADDR_ANY) */
+			/* 	local_wild = grp->il_inp[idx]; */
+					   
+			if (grp->il_laddr.s_addr == laddr->s_addr) {
+				printf("%s] returning found match on port & address index: %d. pcb: %p\n",
+						__func__, idx, grp->il_inp[idx]);				
 				return grp->il_inp[idx];
-			} else if (grp->il_laddr.s_addr == INADDR_ANY) {
-				/* printf("%s] found local wild match index: %d\n", __func__, idx); */
+			}
+			else
+			if (grp->il_laddr.s_addr == INADDR_ANY && (lookupflags & INPLOOKUP_WILDCARD)) {
+				printf("%s] found local wild match index: %d\n", __func__, idx);
 				local_wild = grp->il_inp[idx];
+				grp_local_wild = grp;
 			}
 		}
 	}
 	if (local_wild != NULL) {
-		/* printf("%s] returning local wild. pcb: %p\n", __func__, local_wild); */
+		printf("%s] returning local wild. pcb: %p\n", __func__, local_wild);
+		/* printf("%s] this means we have a new connection so we add to round robin counter\n", __func__); */
+		/* grp_local_wild->il_inpcur++; */
+		/* printf("%s] increase round robin counter to %d\n", __func__, grp_local_wild->il_inpcur); */
 		return local_wild;
 	}
-	/* printf("%s] returning NULL\n", __func__); */
+	printf("%s] returning NULL\n", __func__);
 	return NULL;
 }
 
@@ -1970,7 +2029,7 @@ in_pcblookup_group(struct inpcbinfo *pcbinfo, struct inpcbgroup *pcbgroup,
     struct in_addr faddr, u_int fport_arg, struct in_addr laddr,
     u_int lport_arg, int lookupflags, struct ifnet *ifp)
 {
-	/* printf("%s] pcbinfo: %p\n", __func__, pcbinfo); */
+	printf("%s] lport %d. fport %d.\n", __func__, ntohs(lport_arg), ntohs(fport_arg));
 	struct inpcbhead *head;
 	struct inpcb *inp, *tmpinp;
 	u_short fport = fport_arg, lport = lport_arg;
@@ -2186,7 +2245,16 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
     u_int fport_arg, struct in_addr laddr, u_int lport_arg, int lookupflags,
     struct ifnet *ifp)
 {
-	/* printf("%s] pcbinfo: %p. lookupflags: %#010x\n", __func__, pcbinfo, lookupflags); */
+
+	printf("%s] laddr ", __func__);
+	print_ip(laddr.s_addr);
+	printf(" lport %d\n", ntohs(lport_arg));
+
+	printf("%s] faddr ", __func__);
+	print_ip(faddr.s_addr);
+	printf(" fport %d\n", ntohs(fport_arg));
+
+	printf("%s] wildcard search %d\n",  __func__, lookupflags & INPLOOKUP_WILDCARD);
 	struct inpcbhead *head;
 	struct inpcb *inp, *tmpinp;
 	u_short fport = fport_arg, lport = lport_arg;
@@ -2200,28 +2268,27 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 	INP_HASH_LOCK_ASSERT(pcbinfo);
 
 	/*
-	 * Check local group first
+	 * Check local group 
 	 */
-	/* if(lookupflags & INPLOOKUP_LOCALGROUP) { */
-	/* printf("%s] lookupflags = INPLOOKUP_LOCALGROUP\n", __func__); */
+	/* if (pcbinfo->ipi_localgrouphashbase != NULL && (lookupflags & INPLOOKUP_WILDCARD)) { */
 	if (pcbinfo->ipi_localgrouphashbase != NULL) {
-		/* && !(ifp && ifp->if_type == IFT_FAITH)) { ???*/
-		/* printf("%s] lookup localgroup for lport %d, fport %d\n", __func__, ntohs(lport), ntohs(fport)); */
-		inp = inpcblocalgroup_lookup(pcbinfo, laddr, lport);
+		printf("%s] lookup in localgroup\n", __func__);
+		inp = inpcblocalgroup_lookup(pcbinfo, &laddr, lport, &faddr, fport, lookupflags);
 		if (inp != NULL) {
-			/* printf("%s] got match in local group. inpcb: %p\n", __func__, inp); */
+			printf("%s] got match in local group. inpcb: %p\n", __func__, inp);
 			return inp;
 		}
 	}
-	/* } */
 
+		
 	/*
-	 * Then look for an exact match.
+	 * Look for an exact match.
 	 */
 	tmpinp = NULL;
 	head = &pcbinfo->ipi_hashbase[INP_PCBHASH(faddr.s_addr, lport, fport,
 	    pcbinfo->ipi_hashmask)];
 	LIST_FOREACH(inp, head, inp_hash) {
+		printf("%s] looking for pcb exact match\n", __func__);
 #ifdef INET6
 		/* XXX inp locking */
 		if ((inp->inp_vflag & INP_IPV4) == 0)
@@ -2236,19 +2303,25 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 			 * the inp here, without any checks.
 			 * Well unless both bound with SO_REUSEPORT?
 			 */
-			if (prison_flag(inp->inp_cred, PR_IP4))
+			if (prison_flag(inp->inp_cred, PR_IP4)) {
+				printf("%s] got exact match. inpcb: %p\n", __func__, inp);
 				return (inp);
+			}
 			if (tmpinp == NULL)
 				tmpinp = inp;
 		}
 	}
-	if (tmpinp != NULL)
+	if (tmpinp != NULL) {
+		printf("%s] got exact (tmp) match. inpcb: %p\n", __func__, tmpinp);
 		return (tmpinp);
+	}
+
 
 	/*
 	 * Then look for a wildcard match, if requested.
 	 */
 	if ((lookupflags & INPLOOKUP_WILDCARD) != 0) {
+		printf("%s] looking for pcb with wildcard\n", __func__);
 		struct inpcb *local_wild = NULL, *local_exact = NULL;
 #ifdef INET6
 		struct inpcb *local_wild_mapped = NULL;
@@ -2287,8 +2360,10 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 			}
 
 			if (inp->inp_laddr.s_addr == laddr.s_addr) {
-				if (injail)
+				if (injail) {
+					printf("%s] got injail match in ipi_hashbase. inpcb: %p\n", __func__, inp);
 					return (inp);
+				}
 				else
 					local_exact = inp;
 			} else if (inp->inp_laddr.s_addr == INADDR_ANY) {
@@ -2304,17 +2379,26 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 						local_wild = inp;
 			}
 		} /* LIST_FOREACH */
-		if (jail_wild != NULL)
+		if (jail_wild != NULL) {
+			printf("%s] got jail wild match in ipi_hashbase. inpcb: %p\n", __func__, jail_wild);
 			return (jail_wild);
-		if (local_exact != NULL)
+		}
+		if (local_exact != NULL) {
+			printf("%s] got local exact match in ipi_hashbase. inpcb: %p\n", __func__, local_exact);
 			return (local_exact);
-		if (local_wild != NULL)
+		}
+		if (local_wild != NULL) {
+			printf("%s] got local wild match in ipi_hashbase. inpcb: %p\n", __func__, local_wild);
 			return (local_wild);
+		}
 #ifdef INET6
-		if (local_wild_mapped != NULL)
+		if (local_wild_mapped != NULL) {
+			printf("%s] got local wild mapped match in ipi_hashbase. inpcb: %p\n", __func__, local_wild_mapped);
 			return (local_wild_mapped);
+		}
 #endif
 	} /* if ((lookupflags & INPLOOKUP_WILDCARD) != 0) */
+	printf("%s] got no match. return NULL\n", __func__);
 
 	return (NULL);
 }
@@ -2331,7 +2415,7 @@ in_pcblookup_hash(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 {
 	/* printf("======================> LOOKUP HASH \n"); */
 	/* printf("\n"); */
-	/* printf("%s] pcbinfo: %p\n", __func__, pcbinfo); */
+	printf("%s] fport %d. lport %d.\n", __func__, ntohs(fport), ntohs(lport));
 	struct inpcb *inp;
 
 	INP_HASH_RLOCK(pcbinfo);
@@ -2371,7 +2455,7 @@ in_pcblookup(struct inpcbinfo *pcbinfo, struct in_addr faddr, u_int fport,
 #endif
 	/* printf("======================> LOOKUP \n"); */
 	/* printf(" \n"); */
-	/* printf("%s] pcbinfo: %p\n", __func__, pcbinfo); */
+	printf("%s] lport %d. fport %d.\n", __func__, ntohs(lport), ntohs(fport));
 
 	KASSERT((lookupflags & ~INPLOOKUP_MASK) == 0,
 	    ("%s: invalid lookup flags %d", __func__, lookupflags));
@@ -2410,8 +2494,7 @@ in_pcblookup_mbuf(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 #endif
 	/* printf("======================> LOOKUP MBUF \n"); */
 	/* printf(" \n"); */
-	/* printf("%s] pcbinfo: %p. fport %d. lport %d.\n", */
-		   /* __func__, pcbinfo, ntohs(fport), ntohs(lport)); */
+	printf("%s] fport %d. lport %d. mbuf %p\n", __func__, ntohs(fport), ntohs(lport), m);
 
 	KASSERT((lookupflags & ~INPLOOKUP_MASK) == 0,
 	    ("%s: invalid lookup flags %d", __func__, lookupflags));
@@ -2453,7 +2536,7 @@ in_pcblookup_mbuf(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 static int
 in_pcbinshash_internal(struct inpcb *inp, int do_pcbgroup_update)
 {
-	/* printf("%s] inpcb: %p\n", __func__, inp); */
+	printf("%s] inpcb: %p\n", __func__, inp);
 	struct inpcbhead *pcbhash;
 	struct inpcbporthead *pcbporthash;
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
@@ -2480,14 +2563,28 @@ in_pcbinshash_internal(struct inpcb *inp, int do_pcbgroup_update)
 	pcbporthash = &pcbinfo->ipi_porthashbase[
 	    INP_PCBPORTHASH(inp->inp_lport, pcbinfo->ipi_porthashmask)];
 
+	printf("%s] laddr ", __func__);
+	print_ip(inp->inp_laddr.s_addr);
+	printf(" lport %d\n", ntohs(inp->inp_lport));
 
+	printf("%s] faddr ", __func__);
+	print_ip(inp->inp_faddr.s_addr);
+	printf(" fport %d\n", ntohs(inp->inp_fport));
+	
+
+	
 	// Add entry in local group
-	// Only do this if SO_REUSEPORT_RR
+	// Only do this if SO_REUSEPORT_LB
+	// Prototype sockets should be added, the per connection spawned socket
+	// should not be added to localgroup.
 	so_options = inp_so_options(inp);
-	/* printf("%s] so_options: %#010x \n", __func__, so_options); */
-	if(so_options & SO_REUSEPORT_RR) {	
-		/* printf("%s] calling add to local group: %p\n", __func__, inp); */
+	printf("%s] so_options: %#010x \n", __func__, so_options);
+	if(so_options & SO_REUSEPORT_LB) {
+		printf("%s] add to local group. inpcb %p\n", __func__, inp);
 		in_pcbinslocalgrouphash(inp, pcbinfo);
+	} else {
+		printf("%s] do NOT add to local group. lport %d. faddr %d. fport %d. inpcb %p\n",
+			   __func__, ntohs(inp->inp_lport), ntohs(hashkey_faddr), ntohs(inp->inp_fport), inp);
 	}
 
 	
@@ -2502,7 +2599,7 @@ in_pcbinshash_internal(struct inpcb *inp, int do_pcbgroup_update)
 	 * If none exists, malloc one and tack it on.
 	 */
 	if (phd == NULL) {
-		/* printf("%s] malloc inpcbport (hashtable for ports)\n", __func__); */
+		printf("%s] malloc inpcbport (hashtable for ports)\n", __func__);
 		phd = malloc(sizeof(struct inpcbport), M_PCB, M_NOWAIT);
 		if (phd == NULL) {
 			return (ENOBUFS); /* XXX */
@@ -2510,10 +2607,14 @@ in_pcbinshash_internal(struct inpcb *inp, int do_pcbgroup_update)
 		phd->phd_port = inp->inp_lport;
 		LIST_INIT(&phd->phd_pcblist);
 		LIST_INSERT_HEAD(pcbporthash, phd, phd_hash);
+		printf("%s] add to ipi_porthashbase. lport %d. faddr %d. fport %d. inpcb %p\n",
+			   __func__, ntohs(inp->inp_lport), ntohs(hashkey_faddr), ntohs(inp->inp_fport), inp);
 	}
 	inp->inp_phd = phd;
 	LIST_INSERT_HEAD(&phd->phd_pcblist, inp, inp_portlist);
 	LIST_INSERT_HEAD(pcbhash, inp, inp_hash);
+	printf("%s] add to ipi_hashbase. lport %d. faddr %d. fport %d. inpcb %p\n",
+		   __func__, ntohs(inp->inp_lport), ntohs(hashkey_faddr), ntohs(inp->inp_fport), inp);
 	inp->inp_flags |= INP_INHASHLIST;
 #ifdef PCBGROUP
 	if (do_pcbgroup_update)
@@ -2556,6 +2657,7 @@ in_pcbinshash_nopcbgroup(struct inpcb *inp)
 void
 in_pcbrehash_mbuf(struct inpcb *inp, struct mbuf *m)
 {
+	printf("%s] inpcb %p. mbuf %p.\n", __func__, inp, m);
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
 	struct inpcbhead *head;
 	u_int32_t hashkey_faddr;
@@ -2602,7 +2704,7 @@ in_pcbremlists(struct inpcb *inp)
 {
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
 
-	printf("%s] inpcb: %p\n", __func__, inp);
+	printf("%s] inpcb %p\n", __func__, inp);
 
 #ifdef INVARIANTS
 	if (pcbinfo == &V_tcbinfo) {
@@ -2621,7 +2723,9 @@ in_pcbremlists(struct inpcb *inp)
 
 		INP_HASH_WLOCK(pcbinfo);
 
+		// XXX Check if SO_REUSEPORT_RR ? 
 		in_pcbremlocalgrouphash(inp, pcbinfo);
+		
 		LIST_REMOVE(inp, inp_hash);
 		LIST_REMOVE(inp, inp_portlist);
 		if (LIST_FIRST(&phd->phd_pcblist) == NULL) {

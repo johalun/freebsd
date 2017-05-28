@@ -188,6 +188,7 @@ cc_after_idle(struct tcpcb *tp)
 int
 tcp_output(struct tcpcb *tp)
 {
+	printf("%s]\n", __func__);
 	struct socket *so = tp->t_inpcb->inp_socket;
 	int32_t len;
 	uint32_t recwin, sendwin;
@@ -1140,6 +1141,12 @@ send:
 		tcpip_fillheaders(tp->t_inpcb, ip, th);
 	}
 
+	printf("%s] mbuf = %p. ", __func__, m);
+	print_ip(ip->ip_src.s_addr);
+	printf(" -> ");
+	print_ip(ip->ip_dst.s_addr);
+	printf("\n");
+	
 	/*
 	 * Fill in fields, remembering maximum advertised
 	 * window for use in delaying messages about window sizes.
@@ -1221,6 +1228,22 @@ send:
 		th->th_off = (sizeof (struct tcphdr) + optlen) >> 2;
 	}
 	th->th_flags = flags;
+
+	printf("%s] sending packet with flags:",__func__);
+	if(flags & TH_SYN)
+		printf(" SYN");
+	if(flags & TH_RST)
+		printf(" RST");
+	if(flags & TH_FIN)
+		printf(" FIN");
+	if(flags & TH_ACK)
+		printf(" ACK");
+	if(flags & TH_CWR)
+		printf(" CWR");
+	if(flags & TH_ECE)
+		printf(" ECE");
+	printf("\n");
+
 	/*
 	 * Calculate receive window.  Don't shrink window,
 	 * but avoid silly window syndrome.
@@ -1633,7 +1656,9 @@ timer:
 	 * If this advertises a larger window than any other segment,
 	 * then remember the size of the advertised window.
 	 * Any pending ACK has now been sent.
-	 */
+	 */	
+	printf("%s] packet sent\n",__func__);
+
 	if (SEQ_GT(tp->rcv_nxt + recwin, tp->rcv_adv))
 		tp->rcv_adv = tp->rcv_nxt + recwin;
 	tp->last_ack_sent = tp->rcv_nxt;

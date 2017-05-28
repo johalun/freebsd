@@ -2552,7 +2552,7 @@ sosetopt(struct socket *so, struct sockopt *sopt)
 		case SO_BROADCAST:
 		case SO_REUSEADDR:
 		case SO_REUSEPORT:
-		case SO_REUSEPORT_RR:
+		case SO_REUSEPORT_LB:
 		case SO_OOBINLINE:
 		case SO_TIMESTAMP:
 		case SO_BINTIME:
@@ -2802,7 +2802,7 @@ sogetopt(struct socket *so, struct sockopt *sopt)
 		case SO_KEEPALIVE:
 		case SO_REUSEADDR:
 		case SO_REUSEPORT:
-		case SO_REUSEPORT_RR:
+		case SO_REUSEPORT_LB:
 		case SO_BROADCAST:
 		case SO_OOBINLINE:
 		case SO_ACCEPTCONN:

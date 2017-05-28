@@ -808,6 +808,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 		laddr = inp->inp_laddr;
 		if (inp->inp_laddr.s_addr == INADDR_ANY)
 			inp->inp_laddr = sc->sc_inc.inc_laddr;
+		printf("%s] mbuf = %p. calling in_pcbconnect_mbuf\n", __func__, m);
 		if ((error = in_pcbconnect_mbuf(inp, (struct sockaddr *)&sin,
 		    thread0.td_ucred, m)) != 0) {
 			inp->inp_laddr = laddr;
@@ -948,6 +949,7 @@ int
 syncache_expand(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
     struct socket **lsop, struct mbuf *m)
 {
+	printf("%s] mbuf = %p. socket %p.\n", __func__, m, *lsop);
 	struct syncache *sc;
 	struct syncache_head *sch;
 	struct syncache scs;
@@ -974,6 +976,7 @@ syncache_expand(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
 #endif
 
 	if (sc == NULL) {
+		printf("%s] mbuf = %p. socket %p. no syncache.\n", __func__, m, *lsop);
 		/*
 		 * There is no syncache entry, so see if this ACK is
 		 * a returning syncookie.  To do this, first:
@@ -1166,6 +1169,7 @@ syncache_expand(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
 		syncache_free(sc);
 	return (1);
 failed:
+	printf("%s] mbuf = %p. failed\n", __func__, m);
 	if (sc != NULL && sc != &scs)
 		syncache_free(sc);
 	if (s != NULL)
@@ -1231,6 +1235,7 @@ syncache_add(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
     struct inpcb *inp, struct socket **lsop, struct mbuf *m, void *tod,
     void *todctx)
 {
+	printf("%s] mbuf = %p. inp %p. socket %p.\n", __func__, m, inp, *lsop);
 	struct tcpcb *tp;
 	struct socket *so;
 	struct syncache *sc = NULL;
@@ -1823,6 +1828,13 @@ syncache_respond(struct syncache *sc, struct syncache_head *sch, int locked,
 		error = ip_output(m, sc->sc_ipopts, NULL, 0, NULL, NULL);
 	}
 #endif
+
+	printf("%s] Sent SYN|ACK.  ", __func__);
+	print_ip(ip->ip_src.s_addr);
+	printf(" -> ");
+	print_ip(ip->ip_dst.s_addr);
+	printf("\n");
+
 	return (error);
 }
 
