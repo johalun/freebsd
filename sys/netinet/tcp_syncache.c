@@ -794,7 +794,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 		struct sockaddr_in sin;
 
 		inp->inp_options = (m) ? ip_srcroute(m) : NULL;
-		
+
 		if (inp->inp_options == NULL) {
 			inp->inp_options = sc->sc_ipopts;
 			sc->sc_ipopts = NULL;
@@ -808,7 +808,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 		laddr = inp->inp_laddr;
 		if (inp->inp_laddr.s_addr == INADDR_ANY)
 			inp->inp_laddr = sc->sc_inc.inc_laddr;
-		printf("%s] mbuf = %p. calling in_pcbconnect_mbuf\n", __func__, m);
+		/* printf("%s] mbuf = %p. calling in_pcbconnect_mbuf\n", __func__, m); */
 		if ((error = in_pcbconnect_mbuf(inp, (struct sockaddr *)&sin,
 		    thread0.td_ucred, m)) != 0) {
 			inp->inp_laddr = laddr;
@@ -839,11 +839,11 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 	if (V_functions_inherit_listen_socket_stack && blk != tp->t_fb) {
 		/*
 		 * Our parents t_fb was not the default,
-		 * we need to release our ref on tp->t_fb and 
+		 * we need to release our ref on tp->t_fb and
 		 * pickup one on the new entry.
 		 */
 		struct tcp_function_block *rblk;
-		
+
 		rblk = find_and_ref_tcp_fb(blk);
 		KASSERT(rblk != NULL,
 		    ("cannot find blk %p out of syncache?", blk));
@@ -854,7 +854,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 		if (tp->t_fb->tfb_tcp_fb_init) {
 			(*tp->t_fb->tfb_tcp_fb_init)(tp);
 		}
-	}		
+	}
 	tp->snd_wl1 = sc->sc_irs;
 	tp->snd_max = tp->iss + 1;
 	tp->snd_nxt = tp->iss + 1;
@@ -949,7 +949,7 @@ int
 syncache_expand(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
     struct socket **lsop, struct mbuf *m)
 {
-	printf("%s] mbuf = %p. socket %p.\n", __func__, m, *lsop);
+	/* printf("%s] mbuf = %p. socket %p.\n", __func__, m, *lsop); */
 	struct syncache *sc;
 	struct syncache_head *sch;
 	struct syncache scs;
@@ -976,7 +976,7 @@ syncache_expand(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
 #endif
 
 	if (sc == NULL) {
-		printf("%s] mbuf = %p. socket %p. no syncache.\n", __func__, m, *lsop);
+		/* printf("%s] mbuf = %p. socket %p. no syncache.\n", __func__, m, *lsop); */
 		/*
 		 * There is no syncache entry, so see if this ACK is
 		 * a returning syncookie.  To do this, first:
@@ -1069,7 +1069,7 @@ syncache_expand(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
 #endif /* TCP_SIGNATURE */
 		/*
 		 * Pull out the entry to unlock the bucket row.
-		 * 
+		 *
 		 * NOTE: We must decrease TCPS_SYN_RECEIVED count here, not
 		 * tcp_state_change().  The tcpcb is not existent at this
 		 * moment.  A new one will be allocated via syncache_socket->
@@ -1169,7 +1169,7 @@ syncache_expand(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
 		syncache_free(sc);
 	return (1);
 failed:
-	printf("%s] mbuf = %p. failed\n", __func__, m);
+	/* printf("%s] mbuf = %p. failed\n", __func__, m); */
 	if (sc != NULL && sc != &scs)
 		syncache_free(sc);
 	if (s != NULL)
@@ -1235,7 +1235,7 @@ syncache_add(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
     struct inpcb *inp, struct socket **lsop, struct mbuf *m, void *tod,
     void *todctx)
 {
-	printf("%s] mbuf = %p. inp %p. socket %p.\n", __func__, m, inp, *lsop);
+	/* printf("%s] mbuf = %p. inp %p. socket %p.\n", __func__, m, inp, *lsop); */
 	struct tcpcb *tp;
 	struct socket *so;
 	struct syncache *sc = NULL;
@@ -1829,11 +1829,11 @@ syncache_respond(struct syncache *sc, struct syncache_head *sch, int locked,
 	}
 #endif
 
-	printf("%s] Sent SYN|ACK.  ", __func__);
-	print_ip(ip->ip_src.s_addr);
-	printf(" -> ");
-	print_ip(ip->ip_dst.s_addr);
-	printf("\n");
+	/* printf("%s] Sent SYN|ACK.  ", __func__); */
+	/* print_ip(ip->ip_src.s_addr); */
+	/* printf(" -> "); */
+	/* print_ip(ip->ip_dst.s_addr); */
+	/* printf("\n"); */
 
 	return (error);
 }
@@ -2057,7 +2057,7 @@ syncookie_generate(struct syncache_head *sch, struct syncache *sc)
 }
 
 static struct syncache *
-syncookie_lookup(struct in_conninfo *inc, struct syncache_head *sch, 
+syncookie_lookup(struct in_conninfo *inc, struct syncache_head *sch,
     struct syncache *sc, struct tcphdr *th, struct tcpopt *to,
     struct socket *lso)
 {
@@ -2095,7 +2095,7 @@ syncookie_lookup(struct in_conninfo *inc, struct syncache_head *sch,
 	sc->sc_flags = 0;
 	bcopy(inc, &sc->sc_inc, sizeof(struct in_conninfo));
 	sc->sc_ipopts = NULL;
-	
+
 	sc->sc_irs = seq;
 	sc->sc_iss = ack;
 

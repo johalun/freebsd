@@ -334,7 +334,7 @@ cc_ack_received(struct tcpcb *tp, struct tcphdr *th, uint16_t nsegs,
 	}
 }
 
-void 
+void
 cc_conn_init(struct tcpcb *tp)
 {
 	struct hc_metrics_lite metrics;
@@ -437,7 +437,7 @@ cc_cong_signal(struct tcpcb *tp, struct tcphdr *th, uint32_t type)
 		EXIT_RECOVERY(tp->t_flags);
 		if (CC_ALGO(tp)->cong_signal == NULL) {
 			/*
-			 * RFC5681 Section 3.1 
+			 * RFC5681 Section 3.1
 			 * ssthresh = max (FlightSize / 2, 2*SMSS) eq (4)
 			 */
 			tp->snd_ssthresh =
@@ -579,7 +579,7 @@ int
 tcp_input(struct mbuf **mp, int *offp, int proto)
 {
 	struct mbuf *m = *mp;
-	printf("%s] mbuf = %p\n", __func__, m);
+	/* printf("%s] mbuf = %p\n", __func__, m); */
 	struct tcphdr *th = NULL;
 	struct ip *ip = NULL;
 	struct inpcb *inp = NULL;
@@ -768,13 +768,13 @@ tcp_input(struct mbuf **mp, int *offp, int proto)
 	}
 	thflags = th->th_flags;
 
-	printf("%s] mbuf = %p. ", __func__, m);
-	print_ip(ip->ip_src.s_addr);
-	printf(" -> ");
-	print_ip(ip->ip_dst.s_addr);
-	printf("\n");
+	/* printf("%s] mbuf = %p. ", __func__, m); */
+	/* print_ip(ip->ip_src.s_addr); */
+	/* printf(" -> "); */
+	/* print_ip(ip->ip_dst.s_addr); */
+	/* printf("\n"); */
 
-	printf("%s] mbuf = %p. flags:",__func__, m);
+	/* printf("%s] mbuf = %p. flags:",__func__, m);
 	if(thflags & TH_SYN)
 		printf(" SYN");
 	if(thflags & TH_RST)
@@ -788,7 +788,7 @@ tcp_input(struct mbuf **mp, int *offp, int proto)
 	if(thflags & TH_ECE)
 		printf(" ECE");
 	printf("\n");
-	
+	*/
 	/*
 	 * Convert TCP protocol specific fields to host format.
 	 */
@@ -829,7 +829,7 @@ tcp_input(struct mbuf **mp, int *offp, int proto)
 		fwd_tag = m_tag_find(m, PACKET_TAG_IPFORWARD, NULL);
 
 findpcb:
-	printf("%s] mbuf = %p. at findpcb label\n", __func__, m);
+	/* printf("%s] mbuf = %p. at findpcb label\n", __func__, m); */
 #ifdef INVARIANTS
 	if (ti_locked == TI_RLOCKED) {
 		INP_INFO_RLOCK_ASSERT(&V_tcbinfo);
@@ -846,7 +846,7 @@ findpcb:
 		 * Transparently forwarded. Pretend to be the destination.
 		 * Already got one like this?
 		 */
-		printf("%s] mbuf = %p. calling in6_pcblookup_mbuf\n", __func__, m);
+		/* printf("%s] mbuf = %p. calling in6_pcblookup_mbuf\n", __func__, m); */
 		inp = in6_pcblookup_mbuf(&V_tcbinfo,
 		    &ip6->ip6_src, th->th_sport, &ip6->ip6_dst, th->th_dport,
 		    INPLOOKUP_WLOCKPCB, m->m_pkthdr.rcvif, m);
@@ -856,7 +856,7 @@ findpcb:
 			 * Because we've rewritten the destination address,
 			 * any hardware-generated hash is ignored.
 			 */
-			printf("%s] mbuf = %p. calling in6_pcblookup\n", __func__, m);
+			/* printf("%s] mbuf = %p. calling in6_pcblookup\n", __func__, m); */
 			inp = in6_pcblookup(&V_tcbinfo, &ip6->ip6_src,
 			    th->th_sport, &next_hop6->sin6_addr,
 			    next_hop6->sin6_port ? ntohs(next_hop6->sin6_port) :
@@ -864,7 +864,7 @@ findpcb:
 			    INPLOOKUP_WLOCKPCB, m->m_pkthdr.rcvif);
 		}
 	} else if (isipv6) {
-		printf("%s] mbuf = %p. calling in6_pcblookup_mbuf (with wildcard)\n", __func__, m);
+		/* printf("%s] mbuf = %p. calling in6_pcblookup_mbuf (with wildcard)\n", __func__, m); */
 		inp = in6_pcblookup_mbuf(&V_tcbinfo, &ip6->ip6_src,
 		    th->th_sport, &ip6->ip6_dst, th->th_dport,
 		    INPLOOKUP_WILDCARD | INPLOOKUP_WLOCKPCB,
@@ -876,7 +876,7 @@ findpcb:
 #endif
 #ifdef INET
 	if (fwd_tag != NULL) {
-		printf("%s] mbuf = %p. forwarding\n", __func__, m);
+		/* printf("%s] mbuf = %p. forwarding\n", __func__, m); */
 		struct sockaddr_in *next_hop;
 
 		next_hop = (struct sockaddr_in *)(fwd_tag+1);
@@ -884,7 +884,7 @@ findpcb:
 		 * Transparently forwarded. Pretend to be the destination.
 		 * already got one like this?
 		 */
-		printf("%s] mbuf = %p. calling in_pcblookup_mbuf\n", __func__, m);
+		/* printf("%s] mbuf = %p. calling in_pcblookup_mbuf\n", __func__, m); */
 		inp = in_pcblookup_mbuf(&V_tcbinfo, ip->ip_src, th->th_sport,
 		    ip->ip_dst, th->th_dport, INPLOOKUP_WLOCKPCB,
 		    m->m_pkthdr.rcvif, m);
@@ -894,7 +894,7 @@ findpcb:
 			 * Because we've rewritten the destination address,
 			 * any hardware-generated hash is ignored.
 			 */
-			printf("%s] mbuf = %p. calling in_pcblookup\n", __func__, m);
+			/* printf("%s] mbuf = %p. calling in_pcblookup\n", __func__, m); */
 			inp = in_pcblookup(&V_tcbinfo, ip->ip_src,
 			    th->th_sport, next_hop->sin_addr,
 			    next_hop->sin_port ? ntohs(next_hop->sin_port) :
@@ -902,7 +902,7 @@ findpcb:
 			    INPLOOKUP_WLOCKPCB, m->m_pkthdr.rcvif);
 		}
 	} else {
-		printf("%s] mbuf = %p. calling in_pcblookup_mbuf (with wildcard)\n", __func__, m);
+		/* printf("%s] mbuf = %p. calling in_pcblookup_mbuf (with wildcard)\n", __func__, m); */
 		inp = in_pcblookup_mbuf(&V_tcbinfo, ip->ip_src,
 		    th->th_sport, ip->ip_dst, th->th_dport,
 		    INPLOOKUP_WILDCARD | INPLOOKUP_WLOCKPCB,
@@ -910,7 +910,7 @@ findpcb:
 	}
 #endif /* INET */
 
-	printf("%s] mbuf = %p. got inpcb after lookup = %p\n", __func__, m, inp);
+	/* printf("%s] mbuf = %p. got inpcb after lookup = %p\n", __func__, m, inp); */
 
 	/*
 	 * If the INPCB does not exist then all data in the incoming
@@ -922,7 +922,7 @@ findpcb:
 		 * Log communication attempts to ports that are not
 		 * in use.
 		 */
-		printf("%s] mbuf = %p. no inpcb found, discarding data.\n", __func__, m);
+		/* printf("%s] mbuf = %p. no inpcb found, discarding data.\n", __func__, m); */
 		if ((tcp_log_in_vain == 1 && (thflags & TH_SYN)) ||
 		    tcp_log_in_vain == 2) {
 			if ((s = tcp_log_vain(NULL, th, (void *)ip, ip6)))
@@ -1043,7 +1043,7 @@ relocked:
 	 * down or it is in the CLOSED state.  Either way we drop the
 	 * segment and send an appropriate response.
 	 */
-	printf("%s] mbuf = %p. get tcppb from inpcb\n", __func__, m);
+	/* printf("%s] mbuf = %p. get tcppb from inpcb\n", __func__, m); */
 	tp = intotcpcb(inp);
 	if (tp == NULL || tp->t_state == TCPS_CLOSED) {
 		rstreason = BANDLIM_RST_CLOSEDPORT;
@@ -1065,8 +1065,8 @@ relocked:
 	 * relock, we have to jump back to 'relocked' as the connection might
 	 * now be in TIMEWAIT.
 	 */
-	printf("%s] mbuf = %p. got valid inpcb\n", __func__, m);
-	
+	/* printf("%s] mbuf = %p. got valid inpcb\n", __func__, m); */
+
 #ifdef INVARIANTS
 	if ((thflags & (TH_FIN | TH_RST)) != 0)
 		INP_INFO_RLOCK_ASSERT(&V_tcbinfo);
@@ -1099,7 +1099,7 @@ relocked:
 #ifdef MAC
 	INP_WLOCK_ASSERT(inp);
 	if (mac_inpcb_check_deliver(inp, m)) {
-		printf("%s] mbuf = %p. mac_inpcb_check_deliver goto dropunlock\n", __func__, m);
+		/* printf("%s] mbuf = %p. mac_inpcb_check_deliver goto dropunlock\n", __func__, m); */
 		goto dropunlock;
 	}
 #endif
@@ -1126,7 +1126,7 @@ relocked:
 	    ("%s: so accepting but tp %p not listening", __func__, tp));
 	if (tp->t_state == TCPS_LISTEN && (so->so_options & SO_ACCEPTCONN)) {
 
-		printf("%s] mbuf = %p. socket in listen & accept state\n", __func__, m);
+		/* printf("%s] mbuf = %p. socket in listen & accept state\n", __func__, m); */
 
 		struct in_conninfo inc;
 
@@ -1153,24 +1153,24 @@ relocked:
 		 */
 		if ((thflags & (TH_RST|TH_ACK|TH_SYN)) == TH_ACK) {
 
-			printf("%s] mbuf = %p. TH_ACK\n", __func__, m);
-			
+			/* printf("%s] mbuf = %p. TH_ACK\n", __func__, m); */
+
 			INP_INFO_RLOCK_ASSERT(&V_tcbinfo);
 			/*
 			 * Parse the TCP options here because
 			 * syncookies need access to the reflected
 			 * timestamp.
 			 */
-			printf("%s] calling tcp_dooption\n", __func__);
+			/* printf("%s] calling tcp_dooption\n", __func__); */
 			tcp_dooptions(&to, optp, optlen, 0);
-			printf("%s] called tcp_dooption\n", __func__);
+			/* printf("%s] called tcp_dooption\n", __func__); */
 			/*
 			 * NB: syncache_expand() doesn't unlock
 			 * inp and tcpinfo locks.
 			 */
-			printf("%s] calling syncache_expand\n", __func__);
+			/* printf("%s] calling syncache_expand\n", __func__); */
 			rstreason = syncache_expand(&inc, &to, th, &so, m);
-			printf("%s] called syncache_expand\n", __func__);
+			/* printf("%s] called syncache_expand\n", __func__); */
 			if (rstreason < 0) {
 				/*
 				 * A failing TCP MD5 signature comparison
@@ -1178,7 +1178,7 @@ relocked:
 				 * and must not produce any response back
 				 * to the sender.
 				 */
-				printf("%s] mbuf = %p. rstreason < 0 goto dropunlock\n", __func__, m);
+				/* printf("%s] mbuf = %p. rstreason < 0 goto dropunlock\n", __func__, m); */
 				goto dropunlock;
 			} else if (rstreason == 0) {
 				/*
@@ -1188,7 +1188,7 @@ relocked:
 				 * of the failure cause.
 				 */
 				rstreason = BANDLIM_RST_OPENPORT;
-				printf("%s] mbuf = %p. rstreason == 0 goto dropwithreset\n", __func__, m);
+				/* printf("%s] mbuf = %p. rstreason == 0 goto dropwithreset\n", __func__, m); */
 				goto dropwithreset;
 			}
 #ifdef TCP_RFC7413
@@ -1205,7 +1205,7 @@ tfo_socket_result:
 				 * retransmit the ACK for another
 				 * try.
 				 */
-				printf("%s] mbuf = %p. socket = NULL, drop package\n", __func__, m);
+				/* printf("%s] mbuf = %p. socket = NULL, drop package\n", __func__, m); */
 				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
 					log(LOG_DEBUG, "%s; %s: Listen socket: "
 					    "Socket allocation failed due to "
@@ -1256,7 +1256,7 @@ tfo_socket_result:
 		 */
 		if (thflags & TH_RST) {
 			syncache_chkrst(&inc, th);
-			printf("%s] mbuf = %p. thflags & TH_RST, goto dropunlock\n", __func__, m);
+			/* printf("%s] mbuf = %p. thflags & TH_RST, goto dropunlock\n", __func__, m); */
 			goto dropunlock;
 		}
 		/*
@@ -1268,7 +1268,7 @@ tfo_socket_result:
 				    "SYN is missing, segment ignored\n",
 				    s, __func__);
 			TCPSTAT_INC(tcps_badsyn);
-			printf("%s] mbuf = %p. goto dropunlock\n", __func__, m);
+			/* printf("%s] mbuf = %p. goto dropunlock\n", __func__, m); */
 			goto dropunlock;
 		}
 		/*
@@ -1282,7 +1282,7 @@ tfo_socket_result:
 			syncache_badack(&inc);	/* XXX: Not needed! */
 			TCPSTAT_INC(tcps_badsyn);
 			rstreason = BANDLIM_RST_OPENPORT;
-			printf("%s] mbuf = %p. goto dropwithreset\n", __func__, m);
+			/* printf("%s] mbuf = %p. goto dropwithreset\n", __func__, m); */
 			goto dropwithreset;
 		}
 		/*
@@ -1302,7 +1302,7 @@ tfo_socket_result:
 				    "SYN|FIN segment ignored (based on "
 				    "sysctl setting)\n", s, __func__);
 			TCPSTAT_INC(tcps_badsyn);
-			printf("%s] mbuf = %p. goto dropunlock\n", __func__, m);
+			/* printf("%s] mbuf = %p. goto dropunlock\n", __func__, m); */
 			goto dropunlock;
 		}
 		/*
@@ -1456,7 +1456,7 @@ tfo_socket_result:
 			ti_locked = TI_UNLOCKED;
 		}
 		INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
-		printf("%s] Valid SYN, entry added to syncache and mbuf consumed.\n", __func__);
+		/* printf("%s] Valid SYN, entry added to syncache and mbuf consumed.\n", __func__); */
 		return (IPPROTO_DONE);
 	} else if (tp->t_state == TCPS_LISTEN) {
 		/*
@@ -1489,11 +1489,11 @@ tfo_socket_result:
 	 */
 	tp->t_fb->tfb_tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, ti_locked);
 	INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
-	printf("%s] tcp_do_segment done.\n", __func__);
+	/* printf("%s] tcp_do_segment done.\n", __func__); */
 	return (IPPROTO_DONE);
 
 dropwithreset:
-	printf("%s] mbuf = %p. at dropwithreset label\n", __func__, m);
+	/* printf("%s] mbuf = %p. at dropwithreset label\n", __func__, m); */
 	TCP_PROBE5(receive, NULL, tp, m, tp, th);
 
 	if (ti_locked == TI_RLOCKED) {
@@ -1517,7 +1517,7 @@ dropwithreset:
 	goto drop;
 
 dropunlock:
-	printf("%s] mbuf = %p. at dropunlock label\n", __func__, m);
+	/* printf("%s] mbuf = %p. at dropunlock label\n", __func__, m); */
 	if (m != NULL)
 		TCP_PROBE5(receive, NULL, tp, m, tp, th);
 
@@ -1537,7 +1537,7 @@ dropunlock:
 		INP_WUNLOCK(inp);
 
 drop:
-	printf("%s] mbuf = %p. at drop label\n", __func__, m);
+	/* printf("%s] mbuf = %p. at drop label\n", __func__, m); */
 	INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
 	if (s != NULL)
 		free(s, M_TCPLOG);
@@ -1624,7 +1624,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 #ifdef TCP_RFC7413
 	int tfo_syn;
 #endif
-	
+
 #ifdef TCPDEBUG
 	/*
 	 * The size of tcp_saveipgen must be the size of the max ip header,
@@ -1830,7 +1830,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	    th->th_seq == tp->rcv_nxt &&
 	    (thflags & (TH_SYN|TH_FIN|TH_RST|TH_URG|TH_ACK)) == TH_ACK &&
 	    tp->snd_nxt == tp->snd_max &&
-	    tiwin && tiwin == tp->snd_wnd && 
+	    tiwin && tiwin == tp->snd_wnd &&
 	    ((tp->t_flags & (TF_NEEDSYN|TF_NEEDFIN)) == 0) &&
 	    LIST_EMPTY(&tp->t_segq) &&
 	    ((to.to_flags & TOF_TS) == 0 ||
@@ -1910,7 +1910,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				if (SEQ_GT(tp->snd_una, tp->snd_recover) &&
 				    SEQ_LEQ(th->th_ack, tp->snd_recover))
 					tp->snd_recover = th->th_ack - 1;
-				
+
 				/*
 				 * Let the congestion control algorithm update
 				 * congestion control related information. This
@@ -2059,7 +2059,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				goto dropwithreset;
 			} else if (thflags & TH_SYN) {
 				/* non-initial SYN is ignored */
-				if ((tcp_timer_active(tp, TT_DELACK) || 
+				if ((tcp_timer_active(tp, TT_DELACK) ||
 				     tcp_timer_active(tp, TT_REXMT)))
 					goto drop;
 			} else if (!(thflags & (TH_ACK|TH_FIN|TH_RST))) {
@@ -2123,7 +2123,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				tp->t_flags |= TF_ECN_PERMIT;
 				TCPSTAT_INC(tcps_ecn_shs);
 			}
-			
+
 			/*
 			 * Received <SYN,ACK> in SYN_SENT[*] state.
 			 * Transitions:
@@ -2441,14 +2441,14 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	/*
 	 * If last ACK falls within this segment's sequence numbers,
 	 * record its timestamp.
-	 * NOTE: 
+	 * NOTE:
 	 * 1) That the test incorporates suggestions from the latest
 	 *    proposal of the tcplw@cray.com list (Braden 1993/04/26).
 	 * 2) That updating only on newer timestamps interferes with
 	 *    our earlier PAWS tests, so this check should be solely
 	 *    predicated on the sequence space of this segment.
-	 * 3) That we modify the segment boundary check to be 
-	 *        Last.ACK.Sent <= SEG.SEQ + SEG.Len  
+	 * 3) That we modify the segment boundary check to be
+	 *        Last.ACK.Sent <= SEG.SEQ + SEG.Len
 	 *    instead of RFC1323's
 	 *        Last.ACK.Sent < SEG.SEQ + SEG.Len,
 	 *    This modified check allows us to overcome RFC1323's
@@ -2527,7 +2527,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				/*
 				 * Account for the ACK of our SYN prior to
 				 * regular ACK processing below.
-				 */ 
+				 */
 				tp->snd_una++;
 			}
 			/*
@@ -2656,10 +2656,10 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 					if ((tp->t_flags & TF_SACK_PERMIT) &&
 					    IN_FASTRECOVERY(tp->t_flags)) {
 						int awnd;
-						
+
 						/*
 						 * Compute the amount of data in flight first.
-						 * We can inject new data into the pipe iff 
+						 * We can inject new data into the pipe iff
 						 * we have less than 1/2 the original window's
 						 * worth of data in flight.
 						 */
