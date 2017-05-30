@@ -337,8 +337,8 @@ struct inpcbport {
 	u_short phd_port;
 };
 
-struct inpcblocalgroup {
-	LIST_ENTRY(inpcblocalgroup) il_list;
+struct inpcblbgroup {
+	LIST_ENTRY(inpcblbgroup) il_list;
 	uint16_t	il_lport;
 	u_char		il_vflag;
 	u_char		il_pad;
@@ -350,14 +350,14 @@ struct inpcblocalgroup {
 	uint32_t	il_inpsiz; /* size of il_inp[] */
 	uint32_t	il_inpcnt; /* # of elem in il_inp[] */
 	/*
-	 * Variable array to group pcbs by addr and port, used for 
-	 * SO_REUSEPORT_XX extension options. 
+	 * Variable array to group pcbs by addr and port, used for
+	 * SO_REUSEPORT_XX extension options.
 	 * Jailed sockets and wildcard IPv4 mapped INET6 sockets
 	 * will not be added to the array.
 	 */
 	struct inpcb	*il_inp[];
 };
-LIST_HEAD(inpcblocalgrouphead, inpcblocalgroup);
+LIST_HEAD(inpcblbgrouphead, inpcblbgroup);
 
 /*-
  * Global data structure for each high-level protocol (UDP, TCP, ...) in both
@@ -452,11 +452,11 @@ struct inpcbinfo {
 	u_long			 ipi_wildmask;		/* (p) */
 
 	/*
-	 * Local group used for socket load balancing (SO_REUSEPORT_XX), 
+	 * Local group used for socket load balancing (SO_REUSEPORT_XX),
 	 * hashed by local address and local port.
 	 */
-	struct	inpcblocalgrouphead *ipi_localgrouphashbase;
-	u_long	ipi_localgrouphashmask;
+	struct	inpcblbgrouphead *ipi_lbgrouphashbase;
+	u_long	ipi_lbgrouphashmask;
 
 	/*
 	 * Pointer to network stack instance
@@ -607,9 +607,9 @@ int		inp_so_options(const struct inpcb *inp);
 	(((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport))) & (mask))
 #define INP_PCBPORTHASH(lport, mask) \
 	(ntohs((lport)) & (mask))
-#define INP_PCBLOCALGROUP_PORTHASH(lport, mask) \
+#define INP_PCBLBGROUP_PORTHASH(lport, mask) \
 	(ntohs((lport)) & (mask))
-#define INP_PCBLOCALGROUP_PKTHASH(faddr, lport, fport) \
+#define INP_PCBLBGROUP_PKTHASH(faddr, lport, fport) \
 	((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport)))
 #define	INP6_PCBHASHKEY(faddr)	((faddr)->s6_addr32[3])
 
@@ -666,7 +666,7 @@ int		inp_so_options(const struct inpcb *inp);
 /*
  * Flags for inp_flags2.
  */
-#define	INP_LLE_VALID		0x00000001 /* cached lle is valid */	
+#define	INP_LLE_VALID		0x00000001 /* cached lle is valid */
 #define	INP_RT_VALID		0x00000002 /* cached rtentry is valid */
 #define	INP_PCBGROUPWILD	0x00000004 /* in pcbgroup wildcard list */
 #define	INP_REUSEPORT		0x00000008 /* SO_REUSEPORT option is set */
