@@ -452,7 +452,7 @@ struct inpcbinfo {
 	u_long			 ipi_wildmask;		/* (p) */
 
 	/*
-	 * Local group used for socket load balancing (SO_REUSEPORT_XX),
+	 * Load balanced group used by the SO_REUSEPORT_LB option,
 	 * hashed by local address and local port.
 	 */
 	struct	inpcblbgrouphead *ipi_lbgrouphashbase;

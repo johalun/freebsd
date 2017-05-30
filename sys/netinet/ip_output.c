@@ -209,11 +209,6 @@ int
 ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
     struct ip_moptions *imo, struct inpcb *inp)
 {
-	//printf("%s] \n", __func__);
-	/* print_ip(ip->ip_src.s_addr); */
-	/* printf(" -> "); */
-	/* print_ip(ip->ip_dst.s_addr); */
-	/* printf("\n"); */
 	struct rm_priotracker in_ifa_tracker;
 	struct ip *ip;
 	struct ifnet *ifp = NULL;	/* keep compiler happy */

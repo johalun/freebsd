@@ -188,7 +188,6 @@ cc_after_idle(struct tcpcb *tp)
 int
 tcp_output(struct tcpcb *tp)
 {
-	//printf("%s]\n", __func__);
 	struct socket *so = tp->t_inpcb->inp_socket;
 	int32_t len;
 	uint32_t recwin, sendwin;
@@ -284,7 +283,7 @@ again:
 	if ((tp->t_flags & TF_SACK_PERMIT) && IN_FASTRECOVERY(tp->t_flags) &&
 	    (p = tcp_sack_output(tp, &sack_bytes_rxmt))) {
 		uint32_t cwin;
-
+		
 		cwin =
 		    imax(min(tp->snd_wnd, tp->snd_cwnd) - sack_bytes_rxmt, 0);
 		/* Do not retransmit SACK segments beyond snd_recover */
@@ -395,14 +394,14 @@ after_sack_rexmit:
 			    off);
 			/*
 			 * Don't remove this (len > 0) check !
-			 * We explicitly check for len > 0 here (although it
-			 * isn't really necessary), to work around a gcc
+			 * We explicitly check for len > 0 here (although it 
+			 * isn't really necessary), to work around a gcc 
 			 * optimization issue - to force gcc to compute
 			 * len above. Without this check, the computation
 			 * of len is bungled by the optimizer.
 			 */
 			if (len > 0) {
-				cwin = tp->snd_cwnd -
+				cwin = tp->snd_cwnd - 
 					(tp->snd_nxt - tp->sack_newdata) -
 					sack_bytes_rxmt;
 				if (cwin < 0)
@@ -684,7 +683,7 @@ after_sack_rexmit:
 		} else
 			oldwin = 0;
 
-		/*
+		/* 
 		 * If the new window size ends up being the same as or less
 		 * than the old size when it is scaled, then don't force
 		 * a window update.
@@ -731,7 +730,7 @@ dontupdate:
 	    !tcp_timer_active(tp, TT_PERSIST)) {
 		tcp_timer_activate(tp, TT_REXMT, tp->t_rxtcur);
 		goto just_return;
-	}
+	} 
 	/*
 	 * TCP window updates are not reliable, rather a polling protocol
 	 * using ``persist'' packets is used to insure receipt of window
@@ -1141,12 +1140,6 @@ send:
 		tcpip_fillheaders(tp->t_inpcb, ip, th);
 	}
 
-	//printf("%s] mbuf = %p. ", __func__, m);
-	//print_ip(ip->ip_src.s_addr);
-	//printf(" -> ");
-	//print_ip(ip->ip_dst.s_addr);
-	//printf("\n");
-
 	/*
 	 * Fill in fields, remembering maximum advertised
 	 * window for use in delaying messages about window sizes.
@@ -1168,7 +1161,7 @@ send:
 		} else
 			flags |= TH_ECE|TH_CWR;
 	}
-
+	
 	if (tp->t_state == TCPS_ESTABLISHED &&
 	    (tp->t_flags & TF_ECN_PERMIT)) {
 		/*
@@ -1186,18 +1179,18 @@ send:
 				ip->ip_tos |= IPTOS_ECN_ECT0;
 			TCPSTAT_INC(tcps_ecn_ect0);
 		}
-
+		
 		/*
 		 * Reply with proper ECN notifications.
 		 */
 		if (tp->t_flags & TF_ECN_SND_CWR) {
 			flags |= TH_CWR;
 			tp->t_flags &= ~TF_ECN_SND_CWR;
-		}
+		} 
 		if (tp->t_flags & TF_ECN_SND_ECE)
 			flags |= TH_ECE;
 	}
-
+	
 	/*
 	 * If we are doing retransmissions, then snd_nxt will
 	 * not reflect the first unsent octet.  For ACK only
@@ -1228,22 +1221,6 @@ send:
 		th->th_off = (sizeof (struct tcphdr) + optlen) >> 2;
 	}
 	th->th_flags = flags;
-
-	/*printf("%s] sending packet with flags:",__func__);
-	if(flags & TH_SYN)
-		printf(" SYN");
-	if(flags & TH_RST)
-		printf(" RST");
-	if(flags & TH_FIN)
-		printf(" FIN");
-	if(flags & TH_ACK)
-		printf(" ACK");
-	if(flags & TH_CWR)
-		printf(" CWR");
-	if(flags & TH_ECE)
-		printf(" ECE");
-	printf("\n");
-	*/
 	/*
 	 * Calculate receive window.  Don't shrink window,
 	 * but avoid silly window syndrome.
@@ -1491,7 +1468,7 @@ out:
 	 * In transmit state, time the transmission and arrange for
 	 * the retransmit.  In persist state, just set snd_max.
 	 */
-	if ((tp->t_flags & TF_FORCEDATA) == 0 ||
+	if ((tp->t_flags & TF_FORCEDATA) == 0 || 
 	    !tcp_timer_active(tp, TT_PERSIST)) {
 		tcp_seq startseq = tp->snd_nxt;
 
@@ -1657,8 +1634,6 @@ timer:
 	 * then remember the size of the advertised window.
 	 * Any pending ACK has now been sent.
 	 */
-	//printf("%s] packet sent\n",__func__);
-
 	if (SEQ_GT(tp->rcv_nxt + recwin, tp->rcv_adv))
 		tp->rcv_adv = tp->rcv_nxt + recwin;
 	tp->last_ack_sent = tp->rcv_nxt;
