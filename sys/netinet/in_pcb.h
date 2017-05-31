@@ -91,16 +91,6 @@ struct in_endpoints {
 	u_int16_t	ie_fport;		/* foreign port */
 	u_int16_t	ie_lport;		/* local port */
 	/* protocol dependent part, local and foreign addr */
-	/* union { */
-	/* 	/\* foreign host table entry *\/ */
-	/* 	struct	in_addr_4in6 ie46_foreign; */
-	/* 	struct	in6_addr ie6_foreign; */
-	/* } ie_dependfaddr; */
-	/* union { */
-	/* 	/\* local host table entry *\/ */
-	/* 	struct	in_addr_4in6 ie46_local; */
-	/* 	struct	in6_addr ie6_local; */
-	/* } ie_dependladdr; */
 	union in_dependaddr ie_dependfaddr;	/* foreign host table entry */
 	union in_dependaddr ie_dependladdr;	/* local host table entry */
 #define	ie_faddr	ie_dependfaddr.id46_addr.ia46_addr4
@@ -109,10 +99,6 @@ struct in_endpoints {
 #define	ie6_laddr	ie_dependladdr.id6_addr
 	u_int32_t	ie6_zoneid;		/* scope zone id */
 };
-/* #define	ie_faddr	ie_dependfaddr.ie46_foreign.ia46_addr4 */
-/* #define	ie_laddr	ie_dependladdr.ie46_local.ia46_addr4 */
-/* #define	ie6_faddr	ie_dependfaddr.ie6_foreign */
-/* #define	ie6_laddr	ie_dependladdr.ie6_local */
 
 /*
  * XXX The defines for inc_* are hacks and should be changed to direct
@@ -346,15 +332,8 @@ struct inpcblbgroup {
 	union in_dependaddr il_dependladdr;
 #define il_laddr	il_dependladdr.id46_addr.ia46_addr4
 #define il6_laddr	il_dependladdr.id6_addr
-	uint32_t    il_inpcur; /* current index in round robin */
 	uint32_t	il_inpsiz; /* size of il_inp[] */
 	uint32_t	il_inpcnt; /* # of elem in il_inp[] */
-	/*
-	 * Variable array to group pcbs by addr and port, used for
-	 * SO_REUSEPORT_XX extension options.
-	 * Jailed sockets and wildcard IPv4 mapped INET6 sockets
-	 * will not be added to the array.
-	 */
 	struct inpcb	*il_inp[];
 };
 LIST_HEAD(inpcblbgrouphead, inpcblbgroup);

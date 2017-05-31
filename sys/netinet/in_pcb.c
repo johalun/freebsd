@@ -261,12 +261,12 @@ in_pcblbgroup_resize(struct inpcblbgrouphead *hdr,
 	return grp;
 }
 
-// XXX: Need this?
+// XXX Need this?
 static void
 in_pcblbgroup_factor(struct inpcblbgroup *grp)
 {
 
-	int ncpus2_shift = 0; // XXX: Get real value for this?
+	int ncpus2_shift = 0; // XXX Get real value for this?
 
 	grp->il_factor =
 		((uint32_t)(0xffff >> ncpus2_shift) / grp->il_inpcnt) + 1;
@@ -296,7 +296,7 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 		return;
 
 	/*
-	 * XXX don't allow jailed socket to join local group
+	 * don't allow jailed socket to join local group
 	 */
 	if (inp->inp_socket != NULL)
 		cred = inp->inp_socket->so_cred;
@@ -307,7 +307,7 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 
 #ifdef INET6
 	/*
-	 * XXX don't allow IPv4 mapped INET6 wild socket
+	 * don't allow IPv4 mapped INET6 wild socket
 	 */
 	if ((inp->inp_vflag & INP_IPV4) &&
 	    inp->inp_laddr.s_addr == INADDR_ANY &&
@@ -753,9 +753,13 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
 	struct in_addr laddr;
 	u_short lport = 0;
+	int lookupflags = 0, reuseport = (so->so_options & SO_REUSEPORT);
 	int error;
-	int lookupflags = 0;
-	int reuseport = (so->so_options & SO_REUSEPORT);
+
+	/*
+	 * XXX Maybe we could let SO_REUSEPORT_LB set SO_REUSEPORT bit here
+	 * so that we don't have to add to the (already messy) code below
+	 */
 	int reuseport_lb = (so->so_options & SO_REUSEPORT_LB);
 
 	/*
@@ -1831,11 +1835,6 @@ in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,
 	 * - Local group does not contain jailed sockets
 	 * - Local group does not contain IPv4 mapped INET6 wild sockets
 	 */
-	int elements = 0;
-	LIST_FOREACH(grp, hdr, il_list) {
-		elements++;
-	}
-
 	LIST_FOREACH(grp, hdr, il_list) {
 #ifdef INET6
 		if (!(grp->il_vflag & INP_IPV4))
@@ -1847,6 +1846,7 @@ in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,
 			uint32_t idx = 0;
 			int pkt_hash = INP_PCBLBGROUP_PKTHASH(faddr->s_addr, lport, fport);
 
+			/* Use il_inpcnt instead of dfbsd's il_factor */
 			idx = pkt_hash % grp->il_inpcnt;
 
 			KASSERT(idx >= 0 && idx < grp->il_inpcnt,
@@ -2142,7 +2142,6 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 			return inp;
 		}
 	}
-
 
 	/*
 	 * Then look for a wildcard match, if requested.
@@ -2504,7 +2503,7 @@ in_pcbremlists(struct inpcb *inp)
 
 		INP_HASH_WLOCK(pcbinfo);
 
-		// XXX Check if SO_REUSEPORT_LB ?
+		// XXX Only do if SO_REUSEPORT_LB set?
 		in_pcbremlbgrouphash(inp, pcbinfo);
 
 		LIST_REMOVE(inp, inp_hash);
