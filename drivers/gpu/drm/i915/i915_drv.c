@@ -669,8 +669,13 @@ static int i915_kick_out_firmware_fb(struct drm_i915_private *dev_priv)
 	ap->ranges[0].base = ggtt->mappable_base;
 	ap->ranges[0].size = ggtt->mappable_end;
 
+#ifdef __FreeBSD__
+	(void)pdev;
+	primary = false;
+#else
 	primary =
 		pdev->resource[PCI_ROM_RESOURCE].flags & IORESOURCE_ROM_SHADOW;
+#endif
 
 	ret = drm_fb_helper_remove_conflicting_framebuffers(ap, "inteldrmfb", primary);
 
@@ -1061,6 +1066,7 @@ static int i915_driver_init_hw(struct drm_i915_private *dev_priv)
 
 	i915_gem_load_init_fences(dev_priv);
 
+#ifndef __FreeBSD__
 	/* On the 945G/GM, the chipset reports the MSI capability on the
 	 * integrated graphics even though the support isn't actually there
 	 * according to the published specs.  It doesn't appear to function
@@ -1076,6 +1082,7 @@ static int i915_driver_init_hw(struct drm_i915_private *dev_priv)
 		if (pci_enable_msi(pdev) < 0)
 			DRM_DEBUG_DRIVER("can't enable MSI");
 	}
+#endif
 
 	return 0;
 
@@ -1091,10 +1098,12 @@ out_ggtt:
  */
 static void i915_driver_cleanup_hw(struct drm_i915_private *dev_priv)
 {
+#ifndef __FreeBSD__
 	struct pci_dev *pdev = dev_priv->drm.pdev;
 
 	if (pdev->msi_enabled)
 		pci_disable_msi(pdev);
+#endif
 
 	pm_qos_remove_request(&dev_priv->pm_qos);
 	i915_ggtt_cleanup_hw(dev_priv);

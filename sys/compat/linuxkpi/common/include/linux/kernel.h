@@ -45,7 +45,6 @@
 #include <sys/time.h>
 
 
-#include <linux/bug.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
 #include <linux/types.h>
@@ -53,14 +52,10 @@
 #include <linux/bitops.h>
 #include <linux/jiffies.h>
 #include <linux/log2.h>
-#include <linux/kconfig.h>
 #include <linux/printk.h>
 
 #include <asm/byteorder.h>
-#include <asm/cpufeature.h>
 #include <asm/smp.h>
-
-#include <machine/stdarg.h>
 
 #include <machine/stdarg.h>
 
@@ -100,6 +95,9 @@
 #define __x86_64__
 #endif
 
+#define	BUILD_BUG_ON(x)			CTASSERT(!(x))
+#define	BUILD_BUG_ON_MSG(x, msg)	BUILD_BUG_ON(x)
+#define	BUILD_BUG_ON_NOT_POWER_OF_2(x)	BUILD_BUG_ON(!powerof2(x))
 
 #define	BUG()			panic("BUG at %s:%d", __FILE__, __LINE__)
 #define	BUG_ON(cond)		do {				\
@@ -157,6 +155,8 @@ extern void db_trace_self_depth(int);
       unlikely(__ret);							\
 })
 
+#define	oops_in_progress	SCHEDULER_STOPPED()
+
 #undef	ALIGN
 #define	ALIGN(x, y)		roundup2((x), (y))
 #undef PTR_ALIGN
@@ -194,7 +194,7 @@ scnprintf(char *buf, size_t size, const char *fmt, ...)
 	i = vscnprintf(buf, size, fmt, args);
 	va_end(args);
 
-	return i;
+	return (i);
 }
 
 #define	irqs_disabled() (curthread->td_critnest != 0 || curthread->td_intr_nesting_level != 0)
@@ -465,9 +465,6 @@ abs64(int64_t x)
 /* XXX move us */
 #define rdmsrl(msr, val)			\
 	((val) = rdmsr((msr)))
-
-#define static_branch_enable(x) do { (x)->state = 1; } while (0)
-#define DEFINE_STATIC_KEY_FALSE(x) struct { int state; } x
 
 typedef struct linux_ratelimit {
 	struct timeval lasttime;
