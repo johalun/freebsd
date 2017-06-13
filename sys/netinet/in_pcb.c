@@ -783,7 +783,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 	laddr.s_addr = *laddrp;
 	if (nam != NULL && laddr.s_addr != INADDR_ANY)
 		return (EINVAL);
-	if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT)) == 0)
+	if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT|SO_REUSEPORT_LB)) == 0)
 		lookupflags = INPLOOKUP_WILDCARD;
 	if (nam == NULL) {
 		if ((error = prison_local_ip4(cred, &laddr)) != 0)
@@ -818,6 +818,11 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 			 * and a multicast address is bound on both
 			 * new and duplicated sockets.
 			 */
+
+			// XXX: How to deal with SO_REUSEPORT_LB here?
+			// Added equivalent treatment as SO_REUSEPORT here for now
+			if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT_LB)) != 0)
+				reuseport_lb = SO_REUSEADDR|SO_REUSEPORT_LB;
 			if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT)) != 0)
 				reuseport = SO_REUSEADDR|SO_REUSEPORT;
 		} else if (sin->sin_addr.s_addr != INADDR_ANY) {
@@ -885,7 +890,8 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 				 */
 				tw = intotw(t);
 				if (tw == NULL ||
-				    (reuseport & tw->tw_so_options) == 0) {
+				    ((reuseport & tw->tw_so_options) == 0 &&
+					(reuseport_lb & tw->tw_so_options) == 0)) {
 					return (EADDRINUSE);
 				}
 			} else if (t &&
