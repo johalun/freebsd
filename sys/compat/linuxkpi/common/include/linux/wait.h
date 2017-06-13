@@ -2,18 +2,18 @@
  * Copyright (c) 2010 Isilon Systems, Inc.
  * Copyright (c) 2010 iX Systems, Inc.
  * Copyright (c) 2010 Panasas, Inc.
- * Copyright (c) 2013-2017 Mellanox Technologies, Ltd.
+ * Copyright (c) 2013, 2014 Mellanox Technologies, Ltd.
  * Copyright (c) 2017 Mark Johnston <markj@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conds
+ * modification, are permitted provided that the following conditions
  * are met:
  * 1. Redistributions of source code must retain the above copyright
- *    notice unmodified, this list of conds, and the following
+ *    notice unmodified, this list of conditions, and the following
  *    disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conds and the following disclaimer in the
+ *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
@@ -37,6 +37,8 @@
 #include <linux/compiler.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+
+#include <asm/atomic.h>
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -116,7 +118,7 @@ void linux_wake_up(wait_queue_head_t *, unsigned int, int, bool);
 #define	wake_up_interruptible_all(wqh)					\
 	linux_wake_up(wqh, TASK_INTERRUPTIBLE, 0, false)
 
-long linux_wait_event_common(wait_queue_head_t *, wait_queue_t *, int,
+int linux_wait_event_common(wait_queue_head_t *, wait_queue_t *, int,
     unsigned int, spinlock_t *);
 
 /*
@@ -124,31 +126,37 @@ long linux_wait_event_common(wait_queue_head_t *, wait_queue_t *, int,
  * cond is true after timeout, remaining jiffies (> 0) if cond is true before
  * timeout.
  */
-#define	__wait_event_common(wqh, cond, timeout, state, lock) ({		\
-	DEFINE_WAIT(__wq);						\
-	int __ret, __end;						\
-									\
-	__end = ticks + (int)(timeout);					\
-	__ret = 0;							\
-	for (;;) {							\
-		linux_prepare_to_wait(&(wqh), &__wq, state);		\
-		if (cond) {						\
-			__ret = 1;					\
-			break;						\
-		}							\
-		__ret = linux_wait_event_common(&(wqh), &__wq, timeout,	\
-		    state, lock);					\
-		if (__ret != 0)						\
-			break;						\
-	}								\
-	linux_finish_wait(&(wqh), &__wq);				\
-	if ((int)(timeout) != MAX_SCHEDULE_TIMEOUT) {			\
-		if (__ret == EWOULDBLOCK)				\
-			__ret = !!(cond);				\
-		else if (__ret != -ERESTARTSYS)				\
-			__ret = imin(__end - ticks, 1);			\
-	}								\
-	__ret;								\
+#define	__wait_event_common(wqh, cond, timeout, state, lock) ({	\
+	DEFINE_WAIT(__wq);					\
+	const int __timeout = (timeout) < 1 ? 1 : (timeout);	\
+	int __start = ticks;					\
+	int __ret = 0;						\
+								\
+	for (;;) {						\
+		linux_prepare_to_wait(&(wqh), &__wq, state);	\
+		if (cond) {					\
+			__ret = 1;				\
+			break;					\
+		}						\
+		__ret = linux_wait_event_common(&(wqh), &__wq,	\
+		    __timeout, state, lock);			\
+		if (__ret != 0)					\
+			break;					\
+	}							\
+	linux_finish_wait(&(wqh), &__wq);			\
+	if (__timeout != MAX_SCHEDULE_TIMEOUT) {		\
+		if (__ret == -EWOULDBLOCK)			\
+			__ret = !!(cond);			\
+		else if (__ret != -ERESTARTSYS) {		\
+			__ret = __timeout + __start - ticks;	\
+			/* range check return value */		\
+			if (__ret < 1)				\
+				__ret = 1;			\
+			else if (__ret > __timeout)		\
+				__ret = __timeout;		\
+		}						\
+	}							\
+	__ret;							\
 })
 
 #define	wait_event(wqh, cond) ({					\
@@ -249,8 +257,9 @@ int linux_wait_on_atomic_t(atomic_t *, unsigned int);
 #define	wake_up_atomic_t(a)		linux_wake_up_atomic_t(a)
 /*
  * All existing callers have a cb that just schedule()s. To avoid adding
- * complexity, just emulate internally. The prototype is different so that
- * callers must be manually modified.
+ * complexity, just emulate that internally. The prototype is different so that
+ * callers must be manually modified; a cb that does something other than call
+ * schedule() will require special treatment.
  */
 #define	wait_on_atomic_t(a, state)	linux_wait_on_atomic_t(a, state)
 

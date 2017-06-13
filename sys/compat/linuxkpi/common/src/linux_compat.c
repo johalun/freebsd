@@ -450,7 +450,7 @@ linux_kq_lock_unowned(void *arg)
 }
 
 static void
-linux_dev_kqfilter_poll(struct linux_file *);
+linux_dev_kqfilter_poll(struct linux_file *, int);
 
 struct linux_file *
 linux_file_alloc(void)
@@ -843,6 +843,10 @@ linux_dev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 		return (error);
 	filp->f_flags = file->f_flag;
 
+	/* the LinuxKPI supports blocking and non-blocking I/O */
+	if (cmd == FIONBIO || cmd == FIOASYNC)
+		return (0);
+
 	linux_set_current(td);
 	size = IOCPARM_LEN(cmd);
 	/* refer to logic in sys_ioctl() */
@@ -869,9 +873,11 @@ linux_dev_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int fflag,
 		current->bsd_ioctl_len = 0;
 	}
 
-	if (error == EWOULDBLOCK)
-		linux_dev_kqfilter_poll(filp);
-	else if (error == ERESTARTSYS)
+	if (error == EWOULDBLOCK) {
+		/* update kqfilter status, if any */
+		linux_dev_kqfilter_poll(filp,
+		    LINUX_KQ_FLAG_HAS_READ | LINUX_KQ_FLAG_HAS_WRITE);
+	} else if (error == ERESTARTSYS)
 		error = ERESTART;
 	return (error);
 }
@@ -906,11 +912,14 @@ linux_dev_read(struct cdev *dev, struct uio *uio, int ioflag)
 			uio->uio_resid -= bytes;
 		} else {
 			error = -bytes;
-			if (error == EWOULDBLOCK)
-				linux_dev_kqfilter_poll(filp);
+			if (error == ERESTARTSYS)
+				error = ERESTART;
 		}
 	} else
 		error = ENXIO;
+
+	/* update kqfilter status, if any */
+	linux_dev_kqfilter_poll(filp, LINUX_KQ_FLAG_HAS_READ);
 
 	return (error);
 }
@@ -945,11 +954,14 @@ linux_dev_write(struct cdev *dev, struct uio *uio, int ioflag)
 			uio->uio_resid -= bytes;
 		} else {
 			error = -bytes;
-			if (error == EWOULDBLOCK)
-				linux_dev_kqfilter_poll(filp);
+			if (error == ERESTARTSYS)
+				error = ERESTART;
 		}
 	} else
 		error = ENXIO;
+
+	/* update kqfilter status, if any */
+	linux_dev_kqfilter_poll(filp, LINUX_KQ_FLAG_HAS_WRITE);
 
 	return (error);
 }
@@ -968,13 +980,13 @@ linux_dev_poll(struct cdev *dev, int events, struct thread *td)
 
 	file = td->td_fpop;
 	filp->f_flags = file->f_flag;
-
 	linux_set_current(td);
-	if (filp->f_op->poll)
-		/* XXX need to add support for bounded wait */
+	if (filp->f_op->poll != NULL) {
+		selrecord(td, &filp->f_selinfo);
 		revents = filp->f_op->poll(filp, NULL) & events;
-	else
+	} else
 		revents = 0;
+
 	return (revents);
 error:
 	return (events & (POLLHUP|POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM));
@@ -1041,21 +1053,20 @@ static struct filterops linux_dev_kqfiltops_write = {
 };
 
 static void
-linux_dev_kqfilter_poll(struct linux_file *filp)
+linux_dev_kqfilter_poll(struct linux_file *filp, int kqflags)
 {
 	int temp;
 
-	spin_lock(&filp->f_kqlock);
-	temp = (filp->f_kqflags & (LINUX_KQ_FLAG_HAS_READ | LINUX_KQ_FLAG_HAS_WRITE));
-	filp->f_kqflags &= ~(LINUX_KQ_FLAG_NEED_READ | LINUX_KQ_FLAG_NEED_WRITE);
-	spin_unlock(&filp->f_kqlock);
-
-	if (temp != 0) {
+	if (filp->f_kqflags & kqflags) {
 		/* get the latest polling state */
 		temp = filp->f_op->poll(filp, NULL);
 
+		spin_lock(&filp->f_kqlock);
+		/* clear kqflags */
+		filp->f_kqflags &= ~(LINUX_KQ_FLAG_NEED_READ |
+		    LINUX_KQ_FLAG_NEED_WRITE);
+		/* update kqflags */
 		if (temp & (POLLIN | POLLOUT)) {
-			spin_lock(&filp->f_kqlock);
 			if (temp & POLLIN)
 				filp->f_kqflags |= LINUX_KQ_FLAG_NEED_READ;
 			if (temp & POLLOUT)
@@ -1063,8 +1074,8 @@ linux_dev_kqfilter_poll(struct linux_file *filp)
 
 			/* make sure the "knote" gets woken up */
 			KNOTE_LOCKED(&filp->f_selinfo.si_note, 0);
-			spin_unlock(&filp->f_kqlock);
 		}
+		spin_unlock(&filp->f_kqlock);
 	}
 }
 
@@ -1108,7 +1119,10 @@ linux_dev_kqfilter(struct cdev *dev, struct knote *kn)
 
 	if (error == 0) {
 		linux_set_current(td);
-		linux_dev_kqfilter_poll(filp);
+
+		/* update kqfilter status, if any */
+		linux_dev_kqfilter_poll(filp,
+		    LINUX_KQ_FLAG_HAS_READ | LINUX_KQ_FLAG_HAS_WRITE);
 	}
 	return (error);
 }
@@ -1277,9 +1291,10 @@ linux_file_poll(struct file *file, int events, struct ucred *active_cred,
 	filp = (struct linux_file *)file->f_data;
 	filp->f_flags = file->f_flag;
 	linux_set_current(td);
-	if (filp->f_op->poll)
+	if (filp->f_op->poll != NULL) {
+		selrecord(td, &filp->f_selinfo);
 		revents = filp->f_op->poll(filp, NULL) & events;
-	else
+	} else
 		revents = 0;
 
 	return (revents);
