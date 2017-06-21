@@ -254,25 +254,10 @@ in_pcblbgroup_resize(struct inpcblbgrouphead *hdr,
 	for (i = 0; i < old_grp->il_inpcnt; ++i)
 		grp->il_inp[i] = old_grp->il_inp[i];
 	grp->il_inpcnt = old_grp->il_inpcnt;
-	grp->il_factor = old_grp->il_factor;
 
 	in_pcblbgroup_free(old_grp);
 
 	return grp;
-}
-
-// XXX Need this?
-static void
-in_pcblbgroup_factor(struct inpcblbgroup *grp)
-{
-
-	int ncpus2_shift = 0; // XXX Get real value for this?
-
-	grp->il_factor =
-		((uint32_t)(0xffff >> ncpus2_shift) / grp->il_inpcnt) + 1;
-
-	KASSERT(grp->il_factor != 0, ("invalid lb group factor, "
-	   "ncpus2_shift %d, inpcnt %d", ncpus2_shift, grp->il_inpcnt));
 }
 
 /*
@@ -354,7 +339,6 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 
 	grp->il_inp[grp->il_inpcnt] = inp;
 	grp->il_inpcnt++;
-	in_pcblbgroup_factor(grp);
 }
 
 static void
@@ -1862,12 +1846,7 @@ in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,
 			uint32_t idx = 0;
 			int pkt_hash = INP_PCBLBGROUP_PKTHASH(faddr->s_addr, lport, fport);
 
-			/* Use il_inpcnt instead of dfbsd's il_factor */
 			idx = pkt_hash % grp->il_inpcnt;
-
-			KASSERT(idx >= 0 && idx < grp->il_inpcnt,
-					("invalid hash index %d with count %d and factor %d",
-					 pkt_hash, grp->il_inpcnt, grp->il_factor));
 
 			if (grp->il_laddr.s_addr == laddr->s_addr) {
 				return grp->il_inp[idx];
