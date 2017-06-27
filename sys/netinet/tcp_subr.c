@@ -245,7 +245,7 @@ static struct tcp_function_block tcp_def_funcblk = {
 	tcp_do_segment,
 	tcp_default_ctloutput,
 	NULL,
-	NULL,	
+	NULL,
 	NULL,
 	NULL,
 	NULL,
@@ -305,11 +305,11 @@ struct tcp_function_block *
 find_and_ref_tcp_functions(struct tcp_function_set *fs)
 {
 	struct tcp_function_block *blk;
-	
-	rw_rlock(&tcp_function_lock);	
+
+	rw_rlock(&tcp_function_lock);
 	blk = find_tcp_functions_locked(fs);
 	if (blk)
-		refcount_acquire(&blk->tfb_refcnt); 
+		refcount_acquire(&blk->tfb_refcnt);
 	rw_runlock(&tcp_function_lock);
 	return(blk);
 }
@@ -318,10 +318,10 @@ struct tcp_function_block *
 find_and_ref_tcp_fb(struct tcp_function_block *blk)
 {
 	struct tcp_function_block *rblk;
-	
-	rw_rlock(&tcp_function_lock);	
+
+	rw_rlock(&tcp_function_lock);
 	rblk = find_tcp_fb_locked(blk, NULL);
-	if (rblk) 
+	if (rblk)
 		refcount_acquire(&rblk->tfb_refcnt);
 	rw_runlock(&tcp_function_lock);
 	return(rblk);
@@ -343,7 +343,7 @@ sysctl_net_inet_default_tcp_functions(SYSCTL_HANDLER_ARGS)
 		strcpy(fs.function_set_name, blk->tfb_tcp_block_name);
 		fs.pcbcnt = blk->tfb_refcnt;
 	}
-	rw_runlock(&tcp_function_lock);	
+	rw_runlock(&tcp_function_lock);
 	error = sysctl_handle_string(oidp, fs.function_set_name,
 				     sizeof(fs.function_set_name), req);
 
@@ -354,8 +354,8 @@ sysctl_net_inet_default_tcp_functions(SYSCTL_HANDLER_ARGS)
 	rw_wlock(&tcp_function_lock);
 	blk = find_tcp_functions_locked(&fs);
 	if ((blk == NULL) ||
-	    (blk->tfb_flags & TCP_FUNC_BEING_REMOVED)) { 
-		error = ENOENT; 
+	    (blk->tfb_flags & TCP_FUNC_BEING_REMOVED)) {
+		error = ENOENT;
 		goto done;
 	}
 	tcp_func_set_ptr = blk;
@@ -397,7 +397,7 @@ sysctl_net_inet_list_available(SYSCTL_HANDLER_ARGS)
 	bufsz -= linesz;
 	outsz = linesz;
 
-	rw_rlock(&tcp_function_lock);	
+	rw_rlock(&tcp_function_lock);
 	TAILQ_FOREACH(f, &t_functions, tf_next) {
 		alias = (f->tf_name != f->tf_fb->tfb_tcp_block_name);
 		linesz = snprintf(cp, bufsz, "%-32s%c %-32s %u\n",
@@ -537,7 +537,7 @@ register_tcp_functions_as_names(struct tcp_function_block *blk, int wait,
 	    (blk->tfb_tcp_do_segment == NULL) ||
 	    (blk->tfb_tcp_ctloutput == NULL) ||
 	    (strlen(blk->tfb_tcp_block_name) == 0)) {
-		/* 
+		/*
 		 * These functions are required and you
 		 * need a name.
 		 */
@@ -549,7 +549,7 @@ register_tcp_functions_as_names(struct tcp_function_block *blk, int wait,
 	    blk->tfb_tcp_timer_active ||
 	    blk->tfb_tcp_timer_stop) {
 		/*
-		 * If you define one timer function you 
+		 * If you define one timer function you
 		 * must have them all.
 		 */
 		if ((blk->tfb_tcp_timer_stop_all == NULL) ||
@@ -651,7 +651,7 @@ deregister_tcp_functions(struct tcp_function_block *blk)
 {
 	struct tcp_function *f;
 	int error=ENOENT;
-	
+
 	if (strcmp(blk->tfb_tcp_block_name, "default") == 0) {
 		/* You can't un-register the default */
 		return (EPERM);
@@ -665,7 +665,7 @@ deregister_tcp_functions(struct tcp_function_block *blk)
 	if (blk->tfb_refcnt) {
 		/* Still tcb attached, mark it. */
 		blk->tfb_flags |= TCP_FUNC_BEING_REMOVED;
-		rw_wunlock(&tcp_function_lock);		
+		rw_wunlock(&tcp_function_lock);
 		return (EBUSY);
 	}
 	while (find_tcp_fb_locked(blk, &f) != NULL) {
@@ -1069,7 +1069,7 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 		m = n;
 	} else {
 		/*
-		 *  reuse the mbuf. 
+		 *  reuse the mbuf.
 		 * XXX MRT We inherit the FIB, which is lucky.
 		 */
 		m_freem(m->m_next);
@@ -1481,12 +1481,12 @@ tcp_discardcb(struct tcpcb *tp)
 	tcp_timer_stop(tp, TT_2MSL);
 	tcp_timer_stop(tp, TT_DELACK);
 	if (tp->t_fb->tfb_tcp_timer_stop_all) {
-		/* 
-		 * Call the stop-all function of the methods, 
+		/*
+		 * Call the stop-all function of the methods,
 		 * this function should call the tcp_timer_stop()
 		 * method with each of the function specific timeouts.
 		 * That stop will be called via the tfb_tcp_timer_stop()
-		 * which should use the async drain function of the 
+		 * which should use the async drain function of the
 		 * callout system (see tcp_var.h).
 		 */
 		tp->t_fb->tfb_tcp_timer_stop_all(tp);
@@ -1556,7 +1556,7 @@ tcp_discardcb(struct tcpcb *tp)
 	if (tp->t_flags & TF_TOE)
 		tcp_offload_detach(tp);
 #endif
-		
+
 	tcp_free_sackholes(tp);
 
 #ifdef TCPPCAP
@@ -1594,7 +1594,7 @@ tcp_timer_discard(void *ptp)
 {
 	struct inpcb *inp;
 	struct tcpcb *tp;
-	
+
 	tp = (struct tcpcb *)ptp;
 	CURVNET_SET(tp->t_vnet);
 	INP_INFO_RLOCK(&V_tcbinfo);
@@ -1632,10 +1632,38 @@ struct tcpcb *
 tcp_close(struct tcpcb *tp)
 {
 	struct inpcb *inp = tp->t_inpcb;
+	struct inpcb *inp_inh = NULL;
+	struct tcpcb *tp_inh = NULL;
 	struct socket *so;
+
+	printf("%s] inp %p\n", __func__, inp);
 
 	INP_INFO_LOCK_ASSERT(&V_tcbinfo);
 	INP_WLOCK_ASSERT(inp);
+
+	// XXX: What can we use instead of (tp->t_flags & TF_LISTEN)?
+	// Try this:
+	if (tp->t_state & TCPS_LISTEN) {
+		/*
+		 * Pending socket/syncache inheritance
+		 *
+		 * If this is a listen(2) socket, find another listen(2)
+		 * socket in the same local group, which could inherit
+		 * the syncache and sockets pending on the completion
+		 * and incompletion queues.
+		 *
+		 * NOTE:
+		 * Currently the inheritance could only happen on the
+		 * listen(2) sockets with SO_REUSEPORT_LB set.
+		 */
+
+		// XXX: How to handle this?
+		// ASSERT_IN_NETISR(0);
+		inp_inh = in_pcblookup_lbgroup_last(inp);
+		printf("%s] inp %p will inherit from inp %p\n", __func__, inp_inh, inp);
+		if (inp_inh != NULL)
+			tp_inh = intotcpcb(inp_inh);
+	}
 
 #ifdef TCP_OFFLOAD
 	if (tp->t_state == TCPS_LISTEN)
@@ -1659,6 +1687,21 @@ tcp_close(struct tcpcb *tp)
 	KASSERT(inp->inp_socket != NULL, ("tcp_close: inp_socket NULL"));
 	so = inp->inp_socket;
 	soisdisconnected(so);
+
+	if (tp->t_state & TCPS_LISTEN) {
+		/* syncache_destroy(tp, tp_inh); */
+		/* tcp_pcbport_merge_oncpu(tp); */
+		/* tcp_pcbport_destroy(tp); */
+		if (inp_inh != NULL && inp_inh->inp_socket != NULL) {
+			/*
+			 * Pending sockets inheritance only needs
+			 * to be done once in the current thread,
+			 * i.e. netisr0.
+			 */
+			soinherit(so, inp_inh->inp_socket);
+		}
+	}
+
 	if (inp->inp_flags & INP_SOCKREF) {
 		KASSERT(so->so_state & SS_PROTOREF,
 		    ("tcp_close: !SS_PROTOREF"));
@@ -2023,7 +2066,7 @@ tcp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 	if (cmd == PRC_MSGSIZE)
 		notify = tcp_mtudisc_notify;
 	else if (V_icmp_may_rst && (cmd == PRC_UNREACH_ADMIN_PROHIB ||
-		cmd == PRC_UNREACH_PORT || cmd == PRC_UNREACH_PROTOCOL || 
+		cmd == PRC_UNREACH_PORT || cmd == PRC_UNREACH_PROTOCOL ||
 		cmd == PRC_TIMXCEED_INTRANS) && ip)
 		notify = tcp_drop_syn_sent;
 
@@ -2159,7 +2202,7 @@ tcp6_ctlinput(int cmd, struct sockaddr *sa, void *d)
 	if (cmd == PRC_MSGSIZE)
 		notify = tcp_mtudisc_notify;
 	else if (V_icmp_may_rst && (cmd == PRC_UNREACH_ADMIN_PROHIB ||
-		cmd == PRC_UNREACH_PORT || cmd == PRC_UNREACH_PROTOCOL || 
+		cmd == PRC_UNREACH_PORT || cmd == PRC_UNREACH_PROTOCOL ||
 		cmd == PRC_TIMXCEED_INTRANS) && ip6 != NULL)
 		notify = tcp_drop_syn_sent;
 
@@ -2437,7 +2480,7 @@ tcp_mtudisc(struct inpcb *inp, int mtuoffer)
 	KASSERT(tp != NULL, ("tcp_mtudisc: tp == NULL"));
 
 	tcp_mss_update(tp, -1, mtuoffer, NULL, NULL);
-  
+
 	so = inp->inp_socket;
 	SOCKBUF_LOCK(&so->so_snd);
 	/* If the mss is larger than the socket buffer, decrease the mss. */

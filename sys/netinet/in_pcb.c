@@ -1812,6 +1812,47 @@ in_pcblookup_local(struct inpcbinfo *pcbinfo, struct in_addr laddr,
 }
 #undef INP_LOOKUP_MAPPED_PCB_COST
 
+struct inpcb *
+in_pcblookup_lbgroup_last(const struct inpcb *inp)
+{
+	// XXX: adapt to freebsd
+
+	const struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
+	const struct inp_localgrphead *hdr;
+	const struct inp_localgroup *grp;
+	int i;
+
+	if (pcbinfo->localgrphashbase == NULL)
+		return NULL;
+
+	hdr = &pcbinfo->localgrphashbase[
+	    INP_PCBLOCALGRPHASH(inp->inp_lport, pcbinfo->localgrphashmask)];
+
+	LIST_FOREACH(grp, hdr, il_list) {
+		if (grp->il_vflag == inp->inp_vflag &&
+		    grp->il_lport == inp->inp_lport &&
+		    memcmp(&grp->il_dependladdr,
+			&inp->inp_inc.inc_ie.ie_dependladdr,
+			sizeof(grp->il_dependladdr)) == 0) {
+			break;
+		}
+	}
+	if (grp == NULL || grp->il_inpcnt == 1)
+		return NULL;
+
+	KASSERT(grp->il_inpcnt >= 2,
+	    ("invalid localgroup inp count %d", grp->il_inpcnt));
+	for (i = 0; i < grp->il_inpcnt; ++i) {
+		if (grp->il_inp[i] == inp) {
+			int last = grp->il_inpcnt - 1;
+
+			if (i == last)
+				last = grp->il_inpcnt - 2;
+			return grp->il_inp[last];
+		}
+	}
+	return NULL;
+}
 
 static struct inpcb *
 in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,

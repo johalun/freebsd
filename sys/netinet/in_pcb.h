@@ -763,6 +763,9 @@ struct inpcb *
 	in_pcblookup(struct inpcbinfo *, struct in_addr, u_int,
 	    struct in_addr, u_int, int, struct ifnet *);
 struct inpcb *
+	in_pcblookup_lbgroup_last(const struct inpcbinfo *pcbinfo,
+	    const struct inpcb *inp);
+struct inpcb *
 	in_pcblookup_mbuf(struct inpcbinfo *, struct in_addr, u_int,
 	    struct in_addr, u_int, int, struct ifnet *, struct mbuf *);
 void	in_pcbnotifyall(struct inpcbinfo *pcbinfo, struct in_addr,

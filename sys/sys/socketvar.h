@@ -386,6 +386,7 @@ int	socreate(int dom, struct socket **aso, int type, int proto,
 int	sodisconnect(struct socket *so);
 struct	sockaddr *sodupsockaddr(const struct sockaddr *sa, int mflags);
 void	sofree(struct socket *so);
+void	soinherit(struct socket *so, struct socket *so_inh);
 void	sohasoutofband(struct socket *so);
 int	solisten(struct socket *so, int backlog, struct thread *td);
 void	solisten_proto(struct socket *so, int backlog);
@@ -431,7 +432,6 @@ void	sowakeup_aio(struct socket *so, struct sockbuf *sb);
 void	solisten_wakeup(struct socket *);
 int	selsocket(struct socket *so, int events, struct timeval *tv,
 	    struct thread *td);
-
 /*
  * Accept filter functions (duh).
  */

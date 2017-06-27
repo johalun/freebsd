@@ -280,7 +280,7 @@ socket_zone_change(void *tag)
 static void
 socket_hhook_register(int subtype)
 {
-	
+
 	if (hhook_head_register(HHOOK_TYPE_SOCKET, subtype,
 	    &V_socket_hhh[subtype],
 	    HHOOK_NOWAIT|HHOOK_HEADISINVNET) != 0)
@@ -290,7 +290,7 @@ socket_hhook_register(int subtype)
 static void
 socket_hhook_deregister(int subtype)
 {
-	
+
 	if (hhook_head_deregister(V_socket_hhh[subtype]) != 0)
 		printf("%s: WARNING: unable to deregister hook\n", __func__);
 }
@@ -1051,6 +1051,80 @@ sofree(struct socket *so)
 	knlist_destroy(&so->so_wrsel.si_note);
 	sodealloc(so);
 }
+
+/*
+ * Let socket in same load balance group (same port and address)
+ * inherit syncache and pending sockets of the closing socket.
+ */
+void
+soinherit(struct socket *so, struct socket *so_inh)
+{
+	// XXX: adapt to freebsd
+
+	TAILQ_HEAD(, socket) comp, incomp;
+	struct socket *sp;
+	int qlen, incqlen;
+
+	KASSERT(so->so_options & SO_ACCEPTCONN,
+	    ("so does not accept connection"));
+	KASSERT(so_inh->so_options & SO_ACCEPTCONN,
+	    ("so_inh does not accept connection"));
+
+	TAILQ_INIT(&comp);
+	TAILQ_INIT(&incomp);
+
+	lwkt_getpooltoken(so);
+	lwkt_getpooltoken(so_inh);
+
+	/*
+	 * Save completed queue and incompleted queue
+	 */
+	TAILQ_CONCAT(&comp, &so->so_comp, so_list);
+	qlen = so->so_qlen;
+	so->so_qlen = 0;
+
+	TAILQ_CONCAT(&incomp, &so->so_incomp, so_list);
+	incqlen = so->so_incqlen;
+	so->so_incqlen = 0;
+
+	/*
+	 * Append the saved completed queue and incompleted
+	 * queue to the socket inherits them.
+	 *
+	 * XXX
+	 * This may temporarily break the inheriting socket's
+	 * so_qlimit.
+	 */
+	TAILQ_FOREACH(sp, &comp, so_list) {
+		sp->so_head = so_inh;
+		crfree(sp->so_cred);
+		sp->so_cred = crhold(so_inh->so_cred);
+	}
+
+	TAILQ_FOREACH(sp, &incomp, so_list) {
+		sp->so_head = so_inh;
+		crfree(sp->so_cred);
+		sp->so_cred = crhold(so_inh->so_cred);
+	}
+
+	TAILQ_CONCAT(&so_inh->so_comp, &comp, so_list);
+	so_inh->so_qlen += qlen;
+
+	TAILQ_CONCAT(&so_inh->so_incomp, &incomp, so_list);
+	so_inh->so_incqlen += incqlen;
+
+	lwkt_relpooltoken(so_inh);
+	lwkt_relpooltoken(so);
+
+	if (qlen) {
+		/*
+		 * "New" connections have arrived
+		 */
+		sorwakeup(so_inh);
+		wakeup(&so_inh->so_timeo);
+	}
+}
+
 
 /*
  * Close a socket on last file table reference removal.  Initiate disconnect
