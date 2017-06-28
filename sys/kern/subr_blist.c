@@ -106,6 +106,7 @@ __FBSDID("$FreeBSD$");
 #include <stdlib.h>
 #include <stdarg.h>
 
+#define	bitcount64(x)	__bitcount64((uint64_t)(x))
 #define malloc(a,b,c)	calloc(a, 1)
 #define free(a,b)	free(a)
 
@@ -120,8 +121,8 @@ void panic(const char *ctl, ...);
  */
 
 static daddr_t blst_leaf_alloc(blmeta_t *scan, daddr_t blk, int count);
-static daddr_t blst_meta_alloc(blmeta_t *scan, daddr_t blk, 
-				daddr_t count, daddr_t radix, int skip);
+static daddr_t	blst_meta_alloc(blmeta_t *scan, daddr_t blk, daddr_t count,
+		    daddr_t radix, daddr_t skip, daddr_t cursor);
 static void blst_leaf_free(blmeta_t *scan, daddr_t relblk, int count);
 static void blst_meta_free(blmeta_t *scan, daddr_t freeBlk, daddr_t count, 
 					daddr_t radix, int skip, daddr_t blk);
@@ -156,7 +157,7 @@ blist_t
 blist_create(daddr_t blocks, int flags)
 {
 	blist_t bl;
-	int radix;
+	daddr_t nodes, radix;
 	int skip = 0;
 
 	/*
@@ -169,14 +170,21 @@ blist_create(daddr_t blocks, int flags)
 		skip = (skip + 1) * BLIST_META_RADIX;
 	}
 
-	bl = malloc(sizeof(struct blist), M_SWAP, flags | M_ZERO);
+	bl = malloc(sizeof(struct blist), M_SWAP, flags);
+	if (bl == NULL)
+		return (NULL);
 
 	bl->bl_blocks = blocks;
 	bl->bl_radix = radix;
 	bl->bl_skip = skip;
-	bl->bl_rootblks = 1 +
-	    blst_radix_init(NULL, bl->bl_radix, bl->bl_skip, blocks);
-	bl->bl_root = malloc(sizeof(blmeta_t) * bl->bl_rootblks, M_SWAP, flags);
+	bl->bl_cursor = 0;
+	nodes = 1 + blst_radix_init(NULL, radix, bl->bl_skip, blocks);
+	bl->bl_root = malloc(nodes * sizeof(blmeta_t), M_SWAP, flags);
+	if (bl->bl_root == NULL) {
+		free(bl, M_SWAP);
+		return (NULL);
+	}
+	blst_radix_init(bl->bl_root, radix, bl->bl_skip, blocks);
 
 #if defined(BLIST_DEBUG)
 	printf(
@@ -184,14 +192,13 @@ blist_create(daddr_t blocks, int flags)
 		", requiring %lldK of ram\n",
 		(long long)bl->bl_blocks,
 		(long long)bl->bl_blocks * 4 / 1024,
-		(long long)(bl->bl_rootblks * sizeof(blmeta_t) + 1023) / 1024
+		(long long)(nodes * sizeof(blmeta_t) + 1023) / 1024
 	);
 	printf("BLIST raw radix tree contains %lld records\n",
-	    (long long)bl->bl_rootblks);
+	    (long long)nodes);
 #endif
-	blst_radix_init(bl->bl_root, bl->bl_radix, bl->bl_skip, blocks);
 
-	return(bl);
+	return (bl);
 }
 
 void 
@@ -202,7 +209,7 @@ blist_destroy(blist_t bl)
 }
 
 /*
- * blist_alloc() - reserve space in the block bitmap.  Return the base
+ * blist_alloc() -   reserve space in the block bitmap.  Return the base
  *		     of a contiguous region or SWAPBLK_NONE if space could
  *		     not be allocated.
  */
@@ -210,17 +217,41 @@ blist_destroy(blist_t bl)
 daddr_t 
 blist_alloc(blist_t bl, daddr_t count)
 {
-	daddr_t blk = SWAPBLK_NONE;
+	daddr_t blk;
 
-	if (bl) {
+	/*
+	 * This loop iterates at most twice.  An allocation failure in the
+	 * first iteration leads to a second iteration only if the cursor was
+	 * non-zero.  When the cursor is zero, an allocation failure will
+	 * reduce the hint, stopping further iterations.
+	 */
+	while (count <= bl->bl_root->bm_bighint) {
 		if (bl->bl_radix == BLIST_BMAP_RADIX)
 			blk = blst_leaf_alloc(bl->bl_root, 0, count);
 		else
-			blk = blst_meta_alloc(bl->bl_root, 0, count, bl->bl_radix, bl->bl_skip);
-		if (blk != SWAPBLK_NONE)
-			bl->bl_free -= count;
+			blk = blst_meta_alloc(bl->bl_root, 0, count,
+			    bl->bl_radix, bl->bl_skip, bl->bl_cursor);
+		if (blk != SWAPBLK_NONE) {
+			bl->bl_cursor = blk + count;
+			return (blk);
+		} else if (bl->bl_cursor != 0)
+			bl->bl_cursor = 0;
 	}
-	return(blk);
+	return (SWAPBLK_NONE);
+}
+
+/*
+ * blist_avail() -	return the number of free blocks.
+ */
+
+daddr_t
+blist_avail(blist_t bl)
+{
+
+	if (bl->bl_radix == BLIST_BMAP_RADIX)
+		return (bitcount64(bl->bl_root->u.bmu_bitmap));
+	else
+		return (bl->bl_root->u.bmu_avail);
 }
 
 /*
@@ -236,8 +267,8 @@ blist_free(blist_t bl, daddr_t blkno, daddr_t count)
 		if (bl->bl_radix == BLIST_BMAP_RADIX)
 			blst_leaf_free(bl->bl_root, blkno, count);
 		else
-			blst_meta_free(bl->bl_root, blkno, count, bl->bl_radix, bl->bl_skip, 0);
-		bl->bl_free += count;
+			blst_meta_free(bl->bl_root, blkno, count,
+			    bl->bl_radix, bl->bl_skip, 0);
 	}
 }
 
@@ -259,10 +290,9 @@ blist_fill(blist_t bl, daddr_t blkno, daddr_t count)
 		else
 			filled = blst_meta_fill(bl->bl_root, blkno, count,
 			    bl->bl_radix, bl->bl_skip, 0);
-		bl->bl_free -= filled;
-		return filled;
-	} else
-		return 0;
+		return (filled);
+	}
+	return (0);
 }
 
 /*
@@ -405,74 +435,77 @@ blst_leaf_alloc(
  */
 
 static daddr_t
-blst_meta_alloc(
-	blmeta_t *scan, 
-	daddr_t blk,
-	daddr_t count,
-	daddr_t radix, 
-	int skip
-) {
-	int i;
-	int next_skip = ((u_int)skip / BLIST_META_RADIX);
+blst_meta_alloc(blmeta_t *scan, daddr_t blk, daddr_t count, daddr_t radix,
+    daddr_t skip, daddr_t cursor)
+{
+	daddr_t i, next_skip, r;
+	int child;
+	bool scan_from_start;
 
-	if (scan->u.bmu_avail == 0)  {
+	if (scan->u.bmu_avail < count) {
 		/*
-		 * ALL-ALLOCATED special case
+		 * The meta node's hint must be too large if the allocation
+		 * exceeds the number of free blocks.  Reduce the hint, and
+		 * return failure.
 		 */
-		scan->bm_bighint = 0;
-		return(SWAPBLK_NONE);
+		scan->bm_bighint = scan->u.bmu_avail;
+		return (SWAPBLK_NONE);
 	}
+	next_skip = skip / BLIST_META_RADIX;
 
+	/*
+	 * An ALL-FREE meta node requires special handling before allocating
+	 * any of its blocks.
+	 */
 	if (scan->u.bmu_avail == radix) {
 		radix /= BLIST_META_RADIX;
 
 		/*
-		 * ALL-FREE special case, initialize uninitialize
-		 * sublevel.
+		 * Reinitialize each of the meta node's children.  An ALL-FREE
+		 * meta node cannot have a terminator in any subtree.
 		 */
 		for (i = 1; i <= skip; i += next_skip) {
-			if (scan[i].bm_bighint == (daddr_t)-1)
-				break;
-			if (next_skip == 1) {
+			if (next_skip == 1)
 				scan[i].u.bmu_bitmap = (u_daddr_t)-1;
-				scan[i].bm_bighint = BLIST_BMAP_RADIX;
-			} else {
-				scan[i].bm_bighint = radix;
+			else
 				scan[i].u.bmu_avail = radix;
-			}
+			scan[i].bm_bighint = radix;
 		}
 	} else {
 		radix /= BLIST_META_RADIX;
 	}
 
-	for (i = 1; i <= skip; i += next_skip) {
+	if (count > radix) {
+		/*
+		 * The allocation exceeds the number of blocks that are
+		 * managed by a subtree of this meta node.
+		 */
+		panic("allocation too large");
+	}
+	scan_from_start = cursor == blk;
+	child = (cursor - blk) / radix;
+	blk += child * radix;
+	for (i = 1 + child * next_skip; i <= skip; i += next_skip) {
 		if (count <= scan[i].bm_bighint) {
 			/*
-			 * count fits in object
+			 * The allocation might fit in the i'th subtree.
 			 */
-			daddr_t r;
 			if (next_skip == 1) {
 				r = blst_leaf_alloc(&scan[i], blk, count);
 			} else {
-				r = blst_meta_alloc(&scan[i], blk, count, radix, next_skip - 1);
+				r = blst_meta_alloc(&scan[i], blk, count,
+				    radix, next_skip - 1, cursor > blk ?
+				    cursor : blk);
 			}
 			if (r != SWAPBLK_NONE) {
 				scan->u.bmu_avail -= count;
-				if (scan->bm_bighint > scan->u.bmu_avail)
-					scan->bm_bighint = scan->u.bmu_avail;
-				return(r);
+				return (r);
 			}
 		} else if (scan[i].bm_bighint == (daddr_t)-1) {
 			/*
 			 * Terminator
 			 */
 			break;
-		} else if (count > radix) {
-			/*
-			 * count does not fit in object even if it were
-			 * complete free.
-			 */
-			panic("blist_meta_alloc: allocation too large");
 		}
 		blk += radix;
 	}
@@ -480,9 +513,10 @@ blst_meta_alloc(
 	/*
 	 * We couldn't allocate count in this subtree, update bighint.
 	 */
-	if (scan->bm_bighint >= count)
+	if (scan_from_start && scan->bm_bighint >= count)
 		scan->bm_bighint = count - 1;
-	return(SWAPBLK_NONE);
+
+	return (SWAPBLK_NONE);
 }
 
 /*
@@ -731,18 +765,16 @@ blst_leaf_fill(blmeta_t *scan, daddr_t blk, int count)
 {
 	int n = blk & (BLIST_BMAP_RADIX - 1);
 	daddr_t nblks;
-	u_daddr_t mask, bitmap;
+	u_daddr_t mask;
 
 	mask = ((u_daddr_t)-1 << n) &
 	    ((u_daddr_t)-1 >> (BLIST_BMAP_RADIX - count - n));
 
-	/* Count the number of blocks we're about to allocate */
-	bitmap = scan->u.bmu_bitmap & mask;
-	for (nblks = 0; bitmap != 0; nblks++)
-		bitmap &= bitmap - 1;
+	/* Count the number of blocks that we are allocating. */
+	nblks = bitcount64(scan->u.bmu_bitmap & mask);
 
 	scan->u.bmu_bitmap &= ~mask;
-	return nblks;
+	return (nblks);
 }
 
 /*
@@ -766,8 +798,13 @@ blst_meta_fill(
 	int next_skip = ((u_int)skip / BLIST_META_RADIX);
 	daddr_t nblks = 0;
 
-	if (count > radix)
-		panic("blist_meta_fill: allocation too large");
+	if (count > radix) {
+		/*
+		 * The allocation exceeds the number of blocks that are
+		 * managed by this meta node.
+		 */
+		panic("allocation too large");
+	}
 	if (count == radix || scan->u.bmu_avail == 0)  {
 		/*
 		 * ALL-ALLOCATED special case
@@ -778,15 +815,18 @@ blst_meta_fill(
 		return nblks;
 	}
 
+	/*
+	 * An ALL-FREE meta node requires special handling before allocating
+	 * any of its blocks.
+	 */
 	if (scan->u.bmu_avail == radix) {
 		radix /= BLIST_META_RADIX;
 
 		/*
-		 * ALL-FREE special case, initialize sublevel
+		 * Reinitialize each of the meta node's children.  An ALL-FREE
+		 * meta node cannot have a terminator in any subtree.
 		 */
 		for (i = 1; i <= skip; i += next_skip) {
-			if (scan[i].bm_bighint == (daddr_t)-1)
-				break;
 			if (next_skip == 1) {
 				scan[i].u.bmu_bitmap = (u_daddr_t)-1;
 				scan[i].bm_bighint = BLIST_BMAP_RADIX;
@@ -1015,7 +1055,7 @@ main(int ac, char **av)
 		long long da = 0;
 		long long count = 0;
 
-		printf("%lld/%lld/%lld> ", (long long)bl->bl_free,
+		printf("%lld/%lld/%lld> ", (long long)blist_avail(bl),
 		    (long long)size, (long long)bl->bl_radix);
 		fflush(stdout);
 		if (fgets(buf, sizeof(buf), stdin) == NULL)

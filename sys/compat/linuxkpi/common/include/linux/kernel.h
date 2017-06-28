@@ -53,7 +53,6 @@
 #include <linux/jiffies.h>
 #include <linux/log2.h>
 #include <linux/printk.h>
-
 #include <asm/byteorder.h>
 #include <asm/smp.h>
 
@@ -426,6 +425,11 @@ kstrtou32(const char *cp, unsigned int base, u32 *res)
 #define	smp_processor_id()	PCPU_GET(cpuid)
 #define	num_possible_cpus()	mp_ncpus
 #define	num_online_cpus()	mp_ncpus
+
+#if defined(__i386__) || defined(__amd64__)
+extern bool linux_cpu_has_clflush;
+#define	cpu_has_clflush		linux_cpu_has_clflush
+#endif
 
 typedef struct pm_message {
         int event;

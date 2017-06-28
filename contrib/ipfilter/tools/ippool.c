@@ -79,7 +79,7 @@ usage(prog)
 	fprintf(stderr, "\t-A [-dnv] [-m <name>] [-o <role>] [-S <seed>] [-t <type>]\n");
 	fprintf(stderr, "\t-f <file> [-dnuv]\n");
 	fprintf(stderr, "\t-F [-dv] [-o <role>] [-t <type>]\n");
-	fprintf(stderr, "\t-l [-dv] [-m <name>] [-t <type>] [-O <fields>]\n");
+	fprintf(stderr, "\t-l [-dv] [-m <name>] [-t <type>]\n");
 	fprintf(stderr, "\t-r [-dnv] [-m <name>] [-o <role>] [-t type] -i <ipaddr>[/netmask]\n");
 	fprintf(stderr, "\t-R [-dnv] [-m <name>] [-o <role>] [-t <type>]\n");
 	fprintf(stderr, "\t-s [-dtv] [-M <core>] [-N <namelist>]\n");
@@ -99,7 +99,7 @@ main(argc, argv)
 
 	assigndefined(getenv("IPPOOL_PREDEFINED"));
 
-	switch (getopt(argc, argv, "aAf:FlnrRsv"))
+	switch (getopt(argc, argv, "aAf:FlrRs"))
 	{
 	case 'a' :
 		err = poolnodecommand(0, argc, argv);
@@ -116,9 +116,6 @@ main(argc, argv)
 	case 'l' :
 		err = poollist(argc, argv);
 		break;
-	case 'n' :
-		opts |= OPT_DONOTHING|OPT_DONTOPEN;
-		break;
 	case 'r' :
 		err = poolnodecommand(1, argc, argv);
 		break;
@@ -127,9 +124,6 @@ main(argc, argv)
 		break;
 	case 's' :
 		err = poolstats(argc, argv);
-		break;
-	case 'v' :
-		opts |= OPT_VERBOSE;
 		break;
 	default :
 		exit(1);
@@ -216,7 +210,13 @@ poolnodecommand(remove, argc, argv)
 		case 'v' :
 			opts |= OPT_VERBOSE;
 			break;
+		default :
+			usage(argv[0]);
+			break;		/* keep compiler happy */
 		}
+
+	if (argc - 1 - optind > 0)
+		usage(argv[0]);
 
 	if (argv[optind] != NULL && ipset == 0) {
 		if (setnodeaddr(type, role, ptr, argv[optind]) == 0)
@@ -274,7 +274,7 @@ poolcommand(remove, argc, argv)
 	bzero((char *)&iph, sizeof(iph));
 	bzero((char *)&pool, sizeof(pool));
 
-	while ((c = getopt(argc, argv, "dm:no:RSv")) != -1)
+	while ((c = getopt(argc, argv, "dm:no:RS:v")) != -1)
 		switch (c)
 		{
 		case 'd' :
@@ -298,12 +298,21 @@ poolcommand(remove, argc, argv)
 			opts |= OPT_NORESOLVE;
 			break;
 		case 'S' :
-			iph.iph_seed = atoi(optarg);
+			if (remove == 0)
+				iph.iph_seed = atoi(optarg);
+			else
+				usage(argv[0]);
 			break;
 		case 'v' :
 			opts |= OPT_VERBOSE;
 			break;
+		default :
+			usage(argv[0]);
+			break;		/* keep compiler happy */
 		}
+
+	if (argc - 1 - optind > 0)
+		usage(argv[0]);
 
 	if (opts & OPT_DEBUG)
 		fprintf(stderr, "poolcommand: opts = %#x\n", opts);
@@ -361,8 +370,6 @@ loadpoolfile(argc, argv, infile)
 {
 	int c;
 
-	infile = optarg;
-
 	while ((c = getopt(argc, argv, "dnRuv")) != -1)
 		switch (c)
 		{
@@ -382,7 +389,13 @@ loadpoolfile(argc, argv, infile)
 		case 'v' :
 			opts |= OPT_VERBOSE;
 			break;
+		default :
+			usage(argv[0]);
+			break;		/* keep compiler happy */
 		}
+
+	if (argc - 1 - optind > 0)
+		usage(argv[0]);
 
 	if (opts & OPT_DEBUG)
 		fprintf(stderr, "loadpoolfile: opts = %#x\n", opts);
@@ -453,7 +466,13 @@ poolstats(argc, argv)
 		case 'v' :
 			opts |= OPT_VERBOSE;
 			break;
+		default :
+			usage(argv[0]);
+			break;		/* keep compiler happy */
 		}
+
+	if (argc - 1 - optind > 0)
+		usage(argv[0]);
 
 	if (opts & OPT_DEBUG)
 		fprintf(stderr, "poolstats: opts = %#x\n", opts);
@@ -559,7 +578,13 @@ poolflush(argc, argv)
 		case 'v' :
 			opts |= OPT_VERBOSE;
 			break;
+		default :
+			usage(argv[0]);
+			break;		/* keep compiler happy */
 		}
+
+	if (argc - 1 - optind > 0)
+		usage(argv[0]);
 
 	if (opts & OPT_DEBUG)
 		fprintf(stderr, "poolflush: opts = %#x\n", opts);
@@ -687,9 +712,16 @@ poollist(argc, argv)
 				return -1;
 			}
 			break;
+#if 0
 		case 'O' :
+			/* XXX This option does not work. This function as  */
+			/* XXX used by state and nat can be used to format  */
+			/* XXX output especially useful for scripting. It   */
+			/* XXX is left here with the intention of making    */
+			/* XXX it work for the same purpose at some point.  */
 			pool_fields = parsefields(poolfields, optarg);
 			break;
+#endif
 		case 't' :
 			type = gettype(optarg, NULL);
 			if (type == IPLT_NONE) {
@@ -700,7 +732,13 @@ poollist(argc, argv)
 		case 'v' :
 			opts |= OPT_VERBOSE;
 			break;
+		default :
+			usage(argv[0]);
+			break;		/* keep compiler happy */
 		}
+
+	if (argc - optind > 0)
+		usage(argv[0]);
 
 	if (opts & OPT_DEBUG)
 		fprintf(stderr, "poollist: opts = %#x\n", opts);
