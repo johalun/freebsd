@@ -1815,18 +1815,16 @@ in_pcblookup_local(struct inpcbinfo *pcbinfo, struct in_addr laddr,
 struct inpcb *
 in_pcblookup_lbgroup_last(const struct inpcb *inp)
 {
-	// XXX: adapt to freebsd
-
 	const struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
-	const struct inp_localgrphead *hdr;
-	const struct inp_localgroup *grp;
+	const struct inpcblbgrouphead *hdr;
+	const struct inpcblbgroup *grp;
 	int i;
 
-	if (pcbinfo->localgrphashbase == NULL)
+	if (pcbinfo->ipi_lbgrouphashbase == NULL)
 		return NULL;
 
-	hdr = &pcbinfo->localgrphashbase[
-	    INP_PCBLOCALGRPHASH(inp->inp_lport, pcbinfo->localgrphashmask)];
+	hdr = &pcbinfo->ipi_lbgrouphashbase[
+	    INP_PCBLBGROUP_PORTHASH(inp->inp_lport, pcbinfo->ipi_lbgrouphashmask)];
 
 	LIST_FOREACH(grp, hdr, il_list) {
 		if (grp->il_vflag == inp->inp_vflag &&
@@ -1841,16 +1839,18 @@ in_pcblookup_lbgroup_last(const struct inpcb *inp)
 		return NULL;
 
 	KASSERT(grp->il_inpcnt >= 2,
-	    ("invalid localgroup inp count %d", grp->il_inpcnt));
+	    ("invalid lbgroup inp count %d", grp->il_inpcnt));
 	for (i = 0; i < grp->il_inpcnt; ++i) {
 		if (grp->il_inp[i] == inp) {
 			int last = grp->il_inpcnt - 1;
 
 			if (i == last)
 				last = grp->il_inpcnt - 2;
+			printf("%s] returning inp at index %d (last)\n", __func__, last);
 			return grp->il_inp[last];
 		}
 	}
+	printf("%s] returning NULL\n", __func__);
 	return NULL;
 }
 

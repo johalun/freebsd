@@ -1632,9 +1632,10 @@ struct tcpcb *
 tcp_close(struct tcpcb *tp)
 {
 	struct inpcb *inp = tp->t_inpcb;
-	struct inpcb *inp_inh = NULL;
-	struct tcpcb *tp_inh = NULL;
 	struct socket *so;
+	struct inpcb *inp_inh = NULL;
+	/* struct tcpcb *tp_inh = NULL; */
+	int listen = tp->t_state & TCPS_LISTEN;
 
 	printf("%s] inp %p\n", __func__, inp);
 
@@ -1643,7 +1644,7 @@ tcp_close(struct tcpcb *tp)
 
 	// XXX: What can we use instead of (tp->t_flags & TF_LISTEN)?
 	// Try this:
-	if (tp->t_state & TCPS_LISTEN) {
+	if (listen) {
 		/*
 		 * Pending socket/syncache inheritance
 		 *
@@ -1660,9 +1661,13 @@ tcp_close(struct tcpcb *tp)
 		// XXX: How to handle this?
 		// ASSERT_IN_NETISR(0);
 		inp_inh = in_pcblookup_lbgroup_last(inp);
-		printf("%s] inp %p will inherit from inp %p\n", __func__, inp_inh, inp);
 		if (inp_inh != NULL)
-			tp_inh = intotcpcb(inp_inh);
+			printf("%s] inp %p will inherit from inp %p\n", __func__, inp_inh, inp);
+		else
+			printf("%s] there is none that can inherit from inp %p\n", __func__, inp);
+
+		/* if (inp_inh != NULL) */
+		/* 	tp_inh = intotcpcb(inp_inh); */
 	}
 
 #ifdef TCP_OFFLOAD
@@ -1688,10 +1693,18 @@ tcp_close(struct tcpcb *tp)
 	so = inp->inp_socket;
 	soisdisconnected(so);
 
-	if (tp->t_state & TCPS_LISTEN) {
-		/* syncache_destroy(tp, tp_inh); */
+	// Socket inherit
+	if(listen)
+	{
+		// XXX What do we do here?
+		// syncache seem to be stored separately from sockets/inps,
+		// no need to do anything??
+		// syncache_destroy(tp, tp_inh);
+
+		// And this?
 		/* tcp_pcbport_merge_oncpu(tp); */
 		/* tcp_pcbport_destroy(tp); */
+
 		if (inp_inh != NULL && inp_inh->inp_socket != NULL) {
 			/*
 			 * Pending sockets inheritance only needs
@@ -1699,6 +1712,8 @@ tcp_close(struct tcpcb *tp)
 			 * i.e. netisr0.
 			 */
 			soinherit(so, inp_inh->inp_socket);
+		} else {
+			printf("%s] ERR: inp_inh or inp_socket NULL\n", __func__);
 		}
 	}
 

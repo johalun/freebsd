@@ -1391,7 +1391,7 @@ tfo_socket_result:
 		if (syncache_add(&inc, &to, th, inp, &so, m, NULL, NULL))
 			goto tfo_socket_result;
 #else
-		printf("%s] inp %p\n", __func__, inp);
+		/* printf("%s] inp %p\n", __func__, inp); */
 		syncache_add(&inc, &to, th, inp, &so, m, NULL, NULL);
 #endif
 		/*

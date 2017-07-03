@@ -1054,13 +1054,11 @@ sofree(struct socket *so)
 
 /*
  * Let socket in same load balance group (same port and address)
- * inherit syncache and pending sockets of the closing socket.
+ * inherit pending sockets of the closing socket.
  */
 void
 soinherit(struct socket *so, struct socket *so_inh)
 {
-	// XXX: adapt to freebsd
-
 	TAILQ_HEAD(, socket) comp, incomp;
 	struct socket *sp;
 	int qlen, incqlen;
@@ -1070,22 +1068,29 @@ soinherit(struct socket *so, struct socket *so_inh)
 	KASSERT(so_inh->so_options & SO_ACCEPTCONN,
 	    ("so_inh does not accept connection"));
 
+	SOCK_LOCK(so);
+	SOCK_LOCK(so_inh);
+
 	TAILQ_INIT(&comp);
 	TAILQ_INIT(&incomp);
 
-	lwkt_getpooltoken(so);
-	lwkt_getpooltoken(so_inh);
+	// Huh what's this?
+	/* lwkt_getpooltoken(so); */
+	/* lwkt_getpooltoken(so_inh); */
 
 	/*
 	 * Save completed queue and incompleted queue
 	 */
-	TAILQ_CONCAT(&comp, &so->so_comp, so_list);
-	qlen = so->so_qlen;
-	so->so_qlen = 0;
+	TAILQ_CONCAT(&comp, &so->sol_comp, so_list);
+	qlen = so->sol_qlen;
+	so->sol_qlen = 0;
 
-	TAILQ_CONCAT(&incomp, &so->so_incomp, so_list);
-	incqlen = so->so_incqlen;
-	so->so_incqlen = 0;
+	TAILQ_CONCAT(&incomp, &so->sol_incomp, so_list);
+	incqlen = so->sol_incqlen;
+	so->sol_incqlen = 0;
+
+	printf("%s] got closing socket qlen %d\n", __func__, qlen);
+	printf("%s] got closing socket incqlen %d\n", __func__, incqlen);
 
 	/*
 	 * Append the saved completed queue and incompleted
@@ -1096,35 +1101,42 @@ soinherit(struct socket *so, struct socket *so_inh)
 	 * so_qlimit.
 	 */
 	TAILQ_FOREACH(sp, &comp, so_list) {
-		sp->so_head = so_inh;
+		sp->so_listen = so_inh;
 		crfree(sp->so_cred);
 		sp->so_cred = crhold(so_inh->so_cred);
+		// XXX: Something more we need to do here?
+		printf("%s] listening socket %p is inheriting comp socket %p\n", __func__, so_inh, sp);
 	}
 
 	TAILQ_FOREACH(sp, &incomp, so_list) {
-		sp->so_head = so_inh;
+		sp->so_listen = so_inh;
 		crfree(sp->so_cred);
 		sp->so_cred = crhold(so_inh->so_cred);
+		// XXX: Something more we need to do here?
+		printf("%s] listening socket %p is inheriting incomp socket %p\n", __func__, so_inh, sp);
 	}
 
-	TAILQ_CONCAT(&so_inh->so_comp, &comp, so_list);
-	so_inh->so_qlen += qlen;
+	TAILQ_CONCAT(&so_inh->sol_comp, &comp, so_list);
+	so_inh->sol_qlen += qlen;
 
-	TAILQ_CONCAT(&so_inh->so_incomp, &incomp, so_list);
-	so_inh->so_incqlen += incqlen;
+	TAILQ_CONCAT(&so_inh->sol_incomp, &incomp, so_list);
+	so_inh->sol_incqlen += incqlen;
 
-	lwkt_relpooltoken(so_inh);
-	lwkt_relpooltoken(so);
+	// Huh what's this?
+	/* lwkt_relpooltoken(so_inh); */
+	/* lwkt_relpooltoken(so); */
+
+	SOCK_UNLOCK(so);
+	SOCK_UNLOCK(so_inh);
 
 	if (qlen) {
 		/*
 		 * "New" connections have arrived
 		 */
-		sorwakeup(so_inh);
 		wakeup(&so_inh->so_timeo);
+		/* sorwakeup(so_inh); */
 	}
 }
-
 
 /*
  * Close a socket on last file table reference removal.  Initiate disconnect

@@ -372,6 +372,7 @@ syncache_insert(struct syncache *sc, struct syncache_head *sch)
 static void
 syncache_drop(struct syncache *sc, struct syncache_head *sch)
 {
+	printf("%s]\n", __func__);
 
 	SCH_LOCK_ASSERT(sch);
 
@@ -1231,7 +1232,7 @@ syncache_add(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
     struct inpcb *inp, struct socket **lsop, struct mbuf *m, void *tod,
     void *todctx)
 {
-	printf("%s] inp %p\n", __func__, inp);
+	/* printf("%s] inp %p\n", __func__, inp); */
 	struct tcpcb *tp;
 	struct socket *so;
 	struct syncache *sc = NULL;
