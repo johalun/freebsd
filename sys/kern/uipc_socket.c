@@ -448,6 +448,8 @@ soalloc(struct vnet *vnet)
 static void
 sodealloc(struct socket *so)
 {
+	if(so->inherit)
+		printf("%s] dealloc inherited socket %p\n", __func__, so);
 
 	KASSERT(so->so_count == 0, ("sodealloc(): so_count %d", so->so_count));
 	KASSERT(so->so_pcb == NULL, ("sodealloc(): so_pcb != NULL"));
@@ -936,6 +938,9 @@ solisten_dequeue(struct socket *head, struct socket **ret, int flags)
 	SOCK_UNLOCK(so);
 	sorele(head);
 
+	if(so->inherit)
+		printf("%s] dequeueing inherited socket %p from socket %p\n", __func__, so, head);
+
 	*ret = so;
 	return (0);
 }
@@ -963,6 +968,9 @@ solisten_dequeue(struct socket *head, struct socket **ret, int flags)
 void
 sofree(struct socket *so)
 {
+	if(so->inherit)
+		printf("%s] inherited socket %p\n", __func__, so);
+
 	struct protosw *pr = so->so_proto;
 
 	SOCK_LOCK_ASSERT(so);
@@ -1005,6 +1013,7 @@ sofree(struct socket *so)
 			TAILQ_REMOVE(&sol->sol_incomp, so, so_list);
 			sol->sol_incqlen--;
 			/* This is guarenteed not to be the last. */
+			printf("%s] calling refcount_release\n", __func__);
 			refcount_release(&sol->so_count);
 			so->so_qstate = SQ_NONE;
 			so->so_listen = NULL;
@@ -1055,12 +1064,19 @@ sofree(struct socket *so)
 /*
  * Let socket in same load balance group (same port and address)
  * inherit pending sockets of the closing socket.
+ *
+ * "so_inh" will inherit sockets from "so"
  */
 void
 soinherit(struct socket *so, struct socket *so_inh)
 {
+	struct thread *td = curthread;
+	struct proc *p = td->td_proc;
+	int pid = p->p_pid;
+	printf("%s] pid %d\n", __func__, pid);
+
 	TAILQ_HEAD(, socket) comp, incomp;
-	struct socket *sp;
+	struct socket *sp, *head, *head_inh;
 	int qlen, incqlen;
 
 	KASSERT(so->so_options & SO_ACCEPTCONN,
@@ -1068,8 +1084,22 @@ soinherit(struct socket *so, struct socket *so_inh)
 	KASSERT(so_inh->so_options & SO_ACCEPTCONN,
 	    ("so_inh does not accept connection"));
 
+
+restart:
 	SOCK_LOCK(so);
+	if ((head = so->so_listen) != NULL &&
+	    __predict_false(SOLISTEN_TRYLOCK(head) == 0)) {
+		SOCK_UNLOCK(so);
+		goto restart;
+	}
+
+restart_inh:
 	SOCK_LOCK(so_inh);
+	if ((head_inh = so_inh->so_listen) != NULL &&
+	    __predict_false(SOLISTEN_TRYLOCK(head_inh) == 0)) {
+		SOCK_UNLOCK(so_inh);
+		goto restart_inh;
+	}
 
 	TAILQ_INIT(&comp);
 	TAILQ_INIT(&incomp);
@@ -1101,7 +1131,10 @@ soinherit(struct socket *so, struct socket *so_inh)
 	 * so_qlimit.
 	 */
 	TAILQ_FOREACH(sp, &comp, so_list) {
+		refcount_acquire(&so_inh->so_count);
+		/* refcount_release(&sp->so_count); */
 		sp->so_listen = so_inh;
+		sp->inherit = 1;
 		crfree(sp->so_cred);
 		sp->so_cred = crhold(so_inh->so_cred);
 		// XXX: Something more we need to do here?
@@ -1109,6 +1142,9 @@ soinherit(struct socket *so, struct socket *so_inh)
 	}
 
 	TAILQ_FOREACH(sp, &incomp, so_list) {
+		refcount_acquire(&so_inh->so_count);
+		/* refcount_release(&sp->so_count); */
+		sp->inherit = 1;
 		sp->so_listen = so_inh;
 		crfree(sp->so_cred);
 		sp->so_cred = crhold(so_inh->so_cred);
@@ -1126,15 +1162,25 @@ soinherit(struct socket *so, struct socket *so_inh)
 	/* lwkt_relpooltoken(so_inh); */
 	/* lwkt_relpooltoken(so); */
 
-	SOCK_UNLOCK(so);
-	SOCK_UNLOCK(so_inh);
 
-	if (qlen) {
+	SOCK_UNLOCK(so);
+	if(head != NULL)
+		SOLISTEN_UNLOCK(head);
+
+
+	SOCK_UNLOCK(so_inh);
+	if(head_inh != NULL) {
+		if(qlen > 0) {
 		/*
 		 * "New" connections have arrived
 		 */
-		wakeup(&so_inh->so_timeo);
+		/* wakeup(&so_inh->so_timeo); */
 		/* sorwakeup(so_inh); */
+		/* sowwakeup(so_inh); */
+			solisten_wakeup(head_inh);
+		} else {
+			SOLISTEN_UNLOCK(head_inh);
+		}
 	}
 }
 
@@ -1149,6 +1195,9 @@ soinherit(struct socket *so, struct socket *so_inh)
 int
 soclose(struct socket *so)
 {
+	if(so->inherit)
+		printf("%s] inherited socket %p\n", __func__, so);
+
 	struct accept_queue lqueue;
 	bool listening;
 	int error = 0;
@@ -1200,6 +1249,7 @@ drop:
 			sp->so_listen = NULL;
 			SOCK_UNLOCK(sp);
 			/* Guaranteed not to be the last. */
+			printf("%s] calling refcount_release\n", __func__);
 			refcount_release(&so->so_count);
 		}
 	}
@@ -1278,6 +1328,8 @@ soaccept(struct socket *so, struct sockaddr **nam)
 int
 soconnect(struct socket *so, struct sockaddr *nam, struct thread *td)
 {
+	if(so->inherit)
+		printf("%s] connecting inherited socket %p\n", __func__, so);
 
 	return (soconnectat(AT_FDCWD, so, nam, td));
 }
@@ -1333,6 +1385,9 @@ soconnect2(struct socket *so1, struct socket *so2)
 int
 sodisconnect(struct socket *so)
 {
+	if(so->inherit)
+		printf("%s] disconnecting inherited socket %p\n", __func__, so);
+
 	int error;
 
 	if ((so->so_state & SS_ISCONNECTED) == 0)
@@ -1515,6 +1570,8 @@ int
 sosend_generic(struct socket *so, struct sockaddr *addr, struct uio *uio,
     struct mbuf *top, struct mbuf *control, int flags, struct thread *td)
 {
+	if(so->inherit)
+		printf("%s] send_generic on inherited socket %p\n", __func__, so);
 	long space;
 	ssize_t resid;
 	int clen = 0, error, dontroute;
@@ -1696,6 +1753,14 @@ int
 sosend(struct socket *so, struct sockaddr *addr, struct uio *uio,
     struct mbuf *top, struct mbuf *control, int flags, struct thread *td)
 {
+	if(so->inherit) {
+		struct thread *td = curthread;
+		struct proc *p = td->td_proc;
+		int pid = p->p_pid;
+		printf("%s] pid %d\n", __func__, pid);
+
+		printf("%s] send on inherited socket %p\n", __func__, so);
+	}
 	int error;
 
 	CURVNET_SET(so->so_vnet);
@@ -2633,6 +2698,9 @@ int
 soreceive(struct socket *so, struct sockaddr **psa, struct uio *uio,
     struct mbuf **mp0, struct mbuf **controlp, int *flagsp)
 {
+	if(so->inherit)
+		printf("%s] receiving on inherited socket %p\n", __func__, so);
+
 	int error;
 
 	CURVNET_SET(so->so_vnet);

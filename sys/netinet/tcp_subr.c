@@ -1439,6 +1439,9 @@ tcp_drop(struct tcpcb *tp, int errno)
 {
 	struct socket *so = tp->t_inpcb->inp_socket;
 
+	if(so->inherit)
+		printf("%s] inherited socket %p\n", __func__, so);
+
 	INP_INFO_LOCK_ASSERT(&V_tcbinfo);
 	INP_WLOCK_ASSERT(tp->t_inpcb);
 
@@ -1639,6 +1642,8 @@ tcp_close(struct tcpcb *tp)
 
 	printf("%s] inp %p\n", __func__, inp);
 
+
+
 	INP_INFO_LOCK_ASSERT(&V_tcbinfo);
 	INP_WLOCK_ASSERT(inp);
 
@@ -1691,6 +1696,10 @@ tcp_close(struct tcpcb *tp)
 		tcp_state_change(tp, TCPS_CLOSED);
 	KASSERT(inp->inp_socket != NULL, ("tcp_close: inp_socket NULL"));
 	so = inp->inp_socket;
+
+	if(so->inherit)
+		printf("%s] inherited socket %p\n", __func__, so);
+
 	soisdisconnected(so);
 
 	// Socket inherit
@@ -1704,18 +1713,21 @@ tcp_close(struct tcpcb *tp)
 		// And this?
 		/* tcp_pcbport_merge_oncpu(tp); */
 		/* tcp_pcbport_destroy(tp); */
-
-		if (inp_inh != NULL && inp_inh->inp_socket != NULL) {
+		if(inp_inh == NULL) {
+			printf("%s] inp_inh is NULL, can't inherit\n", __func__);
+		} else if(inp_inh->inp_socket == NULL) {
+			printf("%s] inp_inh->inp_socket is NULL, can't inherit\n", __func__);
+		} else {
 			/*
 			 * Pending sockets inheritance only needs
 			 * to be done once in the current thread,
 			 * i.e. netisr0.
 			 */
+			printf("%s] calling soinherit()\n", __func__);
 			soinherit(so, inp_inh->inp_socket);
-		} else {
-			printf("%s] ERR: inp_inh or inp_socket NULL\n", __func__);
 		}
 	}
+
 
 	if (inp->inp_flags & INP_SOCKREF) {
 		KASSERT(so->so_state & SS_PROTOREF,
@@ -1724,6 +1736,7 @@ tcp_close(struct tcpcb *tp)
 		INP_WUNLOCK(inp);
 		SOCK_LOCK(so);
 		so->so_state &= ~SS_PROTOREF;
+		printf("%s] calling sofree\n", __func__);
 		sofree(so);
 		return (NULL);
 	}

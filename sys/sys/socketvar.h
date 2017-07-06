@@ -73,6 +73,7 @@ struct socket;
  */
 TAILQ_HEAD(accept_queue, socket);
 struct socket {
+	uint32_t   	inherit;
 	struct mtx	so_lock;
 	volatile u_int	so_count;	/* (b / refcount) */
 	struct selinfo	so_rdsel;	/* (b/cr) for so_rcv/so_comp */
