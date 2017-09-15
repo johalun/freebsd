@@ -73,7 +73,6 @@ struct socket;
  */
 TAILQ_HEAD(accept_queue, socket);
 struct socket {
-	uint32_t   	inherit;
 	struct mtx	so_lock;
 	volatile u_int	so_count;	/* (b / refcount) */
 	struct selinfo	so_rdsel;	/* (b/cr) for so_rcv/so_comp */
@@ -205,8 +204,8 @@ struct xsocket {
 	short	so_linger;
 	short	so_state;
 	caddr_t	so_pcb;		/* another convenient handle */
-	int		xso_protocol;
-	int		xso_family;
+	int	xso_protocol;
+	int	xso_family;
 	u_int	so_qlen;
 	u_int	so_incqlen;
 	u_int	so_qlimit;
@@ -433,6 +432,7 @@ void	sowakeup_aio(struct socket *so, struct sockbuf *sb);
 void	solisten_wakeup(struct socket *);
 int	selsocket(struct socket *so, int events, struct timeval *tv,
 	    struct thread *td);
+
 /*
  * Accept filter functions (duh).
  */

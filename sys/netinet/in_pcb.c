@@ -1007,7 +1007,7 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 	/*
 	 * If we found a route, use the address corresponding to
 	 * the outgoing interface.
-	 *
+	 * 
 	 * Otherwise assume faddr is reachable on a directly connected
 	 * network and try to find a corresponding interface to take
 	 * the source address from.
@@ -2630,7 +2630,7 @@ ip_fini(void *xtp)
 	callout_stop(&ipport_tick_callout);
 }
 
-/*
+/* 
  * The ipport_callout should start running at about the time we attach the
  * inet or inet6 domains.
  */
@@ -2644,7 +2644,7 @@ ipport_tick_init(const void *unused __unused)
 	EVENTHANDLER_REGISTER(shutdown_pre_sync, ip_fini, NULL,
 		SHUTDOWN_PRI_DEFAULT);
 }
-SYSINIT(ipport_tick_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_MIDDLE,
+SYSINIT(ipport_tick_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_MIDDLE, 
     ipport_tick_init, NULL);
 
 void

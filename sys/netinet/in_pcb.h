@@ -647,11 +647,11 @@ int		inp_so_options(const struct inpcb *inp);
 /*
  * Flags for inp_flags2.
  */
-#define	INP_LLE_VALID		0x00000001 /* cached lle is valid */
+#define	INP_LLE_VALID		0x00000001 /* cached lle is valid */ 
 #define	INP_RT_VALID		0x00000002 /* cached rtentry is valid */
 #define	INP_PCBGROUPWILD	0x00000004 /* in pcbgroup wildcard list */
 #define	INP_REUSEPORT		0x00000008 /* SO_REUSEPORT option is set */
-#define	INP_FREED			0x00000010 /* inp itself is not valid */
+#define	INP_FREED		0x00000010 /* inp itself is not valid */
 #define	INP_REUSEADDR		0x00000020 /* SO_REUSEADDR option is set */
 #define	INP_BINDMULTI		0x00000040 /* IP_BINDMULTI option is set */
 #define	INP_RSS_BUCKET_SET	0x00000080 /* IP_RSS_LISTEN_BUCKET is set */
