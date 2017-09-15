@@ -838,7 +838,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 	if (V_functions_inherit_listen_socket_stack && blk != tp->t_fb) {
 		/*
 		 * Our parents t_fb was not the default,
-		 * we need to release our ref on tp->t_fb and 
+		 * we need to release our ref on tp->t_fb and
 		 * pickup one on the new entry.
 		 */
 		struct tcp_function_block *rblk;
