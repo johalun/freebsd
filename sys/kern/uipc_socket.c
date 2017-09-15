@@ -1115,14 +1115,12 @@ restart_inh:
 	TAILQ_FOREACH(sp, &comp, so_list) {
 		refcount_acquire(&so_inh->so_count);
 		sp->so_listen = so_inh;
-		sp->inherit = 1;
 		crfree(sp->so_cred);
 		sp->so_cred = crhold(so_inh->so_cred);
 	}
 
 	TAILQ_FOREACH(sp, &incomp, so_list) {
 		refcount_acquire(&so_inh->so_count);
-		sp->inherit = 1;
 		sp->so_listen = so_inh;
 		crfree(sp->so_cred);
 		sp->so_cred = crhold(so_inh->so_cred);
