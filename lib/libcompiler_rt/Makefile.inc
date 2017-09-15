@@ -32,14 +32,15 @@ SRCF+=		divdi3
 SRCF+=		divmoddi4
 SRCF+=		divmodsi4
 SRCF+=		divsc3
+SRCF+=		divsi3
 SRCF+=		divtc3
 SRCF+=		divti3
 SRCF+=		divxc3
 SRCF+=		enable_execute_stack
 SRCF+=		eprintf
 SRCF+=		extendhfsf2
-SRCF+=		ffssi2
 SRCF+=		ffsdi2
+SRCF+=		ffssi2
 SRCF+=		ffsti2
 SRCF+=		fixdfdi
 SRCF+=		fixdfti
@@ -78,6 +79,7 @@ SRCF+=		int_util
 SRCF+=		lshrdi3
 SRCF+=		lshrti3
 SRCF+=		moddi3
+SRCF+=		modsi3
 SRCF+=		modti3
 SRCF+=		muldc3
 SRCF+=		muldi3
@@ -120,8 +122,10 @@ SRCF+=		udivdi3
 SRCF+=		udivmoddi4
 SRCF+=		udivmodsi4
 SRCF+=		udivmodti4
+SRCF+=		udivsi3
 SRCF+=		udivti3
 SRCF+=		umoddi3
+SRCF+=		umodsi3
 SRCF+=		umodti3
 
 # __cpu_model support, only used on x86
@@ -176,15 +180,8 @@ SRCF+=		comparedf2
 SRCF+=		comparesf2
 .endif
 
-.if ${MACHINE_CPUARCH} != "mips"
-SRCF+=		divsi3
-SRCF+=		modsi3
-SRCF+=		udivsi3
-SRCF+=		umodsi3
-.endif
-
 # FreeBSD-specific atomic intrinsics.
-.if ${MACHINE_CPUARCH} == "arm" || ${MACHINE_CPUARCH} == "armv6"
+.if ${MACHINE_CPUARCH} == "arm"
 .PATH:		${SRCTOP}/sys/arm/arm
 
 SRCF+=		stdatomic
@@ -225,9 +222,8 @@ SRCS+=		switchu8.S
 SRCS+=		sync_synchronize.S
 .endif
 
-# GCC-6.3 on mips32 requires bswap32 built-in.
-.if ${MACHINE_CPUARCH} == "mips"
+# On some archs GCC-6.3 requires bswap32 built-in.
+.if ${MACHINE_CPUARCH} == "mips" || ${MACHINE_CPUARCH} == "sparc64"
 SRCS+=		bswapdi2.c
 SRCS+=		bswapsi2.c
 .endif
-

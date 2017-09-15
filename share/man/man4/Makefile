@@ -141,6 +141,7 @@ MAN=	aac.4 \
 	edsc.4 \
 	ehci.4 \
 	em.4 \
+	ena.4 \
 	enc.4 \
 	epair.4 \
 	esp.4 \
@@ -561,6 +562,7 @@ MAN=	aac.4 \
 	wlan_tkip.4 \
 	wlan_wep.4 \
 	wlan_xauth.4 \
+	wmt.4 \
 	${_wpi.4} \
 	wsp.4 \
 	xe.4 \
