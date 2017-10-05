@@ -221,7 +221,9 @@ in_pcblbgroup_alloc(struct inpcblbgrouphead *hdr, u_char vflag,
 	struct inpcblbgroup *grp;
 
 	size_t bytes = __offsetof(struct inpcblbgroup, il_inp[size]);
-	grp = malloc(bytes, M_PCB, M_WAITOK | M_ZERO);
+	grp = malloc(bytes, M_PCB, M_ZERO | M_NOWAIT);
+	if(!grp)
+		return NULL;
 	grp->il_vflag = vflag;
 	grp->il_lport = port;
 	grp->il_dependladdr = *addr;
@@ -247,6 +249,8 @@ in_pcblbgroup_resize(struct inpcblbgrouphead *hdr,
 
 	grp = in_pcblbgroup_alloc(hdr, old_grp->il_vflag,
 	    old_grp->il_lport, &old_grp->il_dependladdr, size);
+	if(!grp)
+		return NULL;
 
 	KASSERT(old_grp->il_inpcnt < grp->il_inpsiz,
 	    ("invalid new local group size %d and old local group count %d",
@@ -263,7 +267,7 @@ in_pcblbgroup_resize(struct inpcblbgrouphead *hdr,
 /*
  * Add PCB to lb group (load balance used by SO_REUSEPORT_LB)
  */
-static void
+static int
 in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 {
 	struct inpcblbgrouphead *hdr;
@@ -278,7 +282,7 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 	struct ucred *cred;
 
 	if (pcbinfo->ipi_lbgrouphashbase == NULL)
-		return;
+		return 0;
 
 	/*
 	 * don't allow jailed socket to join local group
@@ -288,7 +292,7 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 	else
 		cred = NULL;
 	if (cred != NULL && jailed(cred))
-		return;
+		return 0;
 
 #ifdef INET6
 	/*
@@ -296,8 +300,9 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 	 */
 	if ((inp->inp_vflag & INP_IPV4) &&
 	    inp->inp_laddr.s_addr == INADDR_ANY &&
-	    INP_CHECK_SOCKAF(inp->inp_socket, AF_INET6))
-		return;
+	    INP_CHECK_SOCKAF(inp->inp_socket, AF_INET6)) {
+		return 0;
+	}
 #endif
 
 	hdr = &pcbinfo->ipi_lbgrouphashbase[
@@ -313,10 +318,12 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 		}
 	}
 	if (grp == NULL) {
-		/* Create new local group */
+		/* Create new load balance group */
 		grp = in_pcblbgroup_alloc(hdr, inp->inp_vflag,
 		    inp->inp_lport, &inp->inp_inc.inc_ie.ie_dependladdr,
 		    INPCBLBGROUP_SIZMIN);
+		if(!grp)
+			return (ENOBUFS);
 	} else if (grp->il_inpcnt == grp->il_inpsiz) {
 		if (grp->il_inpsiz >= INPCBLBGROUP_SIZMAX) {
 			static int limit_logged = 0;
@@ -326,11 +333,13 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 				printf("lb group port %d, "
 					   "limit reached\n", ntohs(grp->il_lport));
 			}
-			return;
+			return 0;
 		}
 
 		/* Expand this local group */
 		grp = in_pcblbgroup_resize(hdr, grp, grp->il_inpsiz * 2);
+		if(!grp)
+			return (ENOBUFS);
 	}
 
 	KASSERT(grp->il_inpcnt < grp->il_inpsiz,
@@ -339,6 +348,7 @@ in_pcbinslbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 
 	grp->il_inp[grp->il_inpcnt] = inp;
 	grp->il_inpcnt++;
+	return 0;
 }
 
 static void
@@ -372,8 +382,10 @@ in_pcbremlbgrouphash(struct inpcb *inp, struct inpcbinfo *pcbinfo)
 				if (grp->il_inpsiz > INPCBLBGROUP_SIZMIN &&
 				    grp->il_inpcnt <= (grp->il_inpsiz / 4)) {
 					/* Shrink this local group */
-					grp = in_pcblbgroup_resize(hdr, grp,
-							   grp->il_inpsiz / 2);
+					struct inpcblbgroup *new_grp =
+						in_pcblbgroup_resize(hdr, grp, grp->il_inpsiz / 2);
+					if(new_grp)
+						grp = new_grp;
 				}
 			}
 			return;
@@ -802,13 +814,12 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 			 * and a multicast address is bound on both
 			 * new and duplicated sockets.
 			 */
-
+			if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT)) != 0)
+				reuseport = SO_REUSEADDR|SO_REUSEPORT;
 			// XXX: How to deal with SO_REUSEPORT_LB here?
 			// Added equivalent treatment as SO_REUSEPORT here for now
 			if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT_LB)) != 0)
 				reuseport_lb = SO_REUSEADDR|SO_REUSEPORT_LB;
-			if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT)) != 0)
-				reuseport = SO_REUSEADDR|SO_REUSEPORT;
 		} else if (sin->sin_addr.s_addr != INADDR_ANY) {
 			sin->sin_port = 0;		/* yech... */
 			bzero(&sin->sin_zero, sizeof(sin->sin_zero));
@@ -1846,11 +1857,9 @@ in_pcblookup_lbgroup_last(const struct inpcb *inp)
 
 			if (i == last)
 				last = grp->il_inpcnt - 2;
-			printf("%s] returning inp at index %d (last)\n", __func__, last);
 			return grp->il_inp[last];
 		}
 	}
-	printf("%s] returning NULL\n", __func__);
 	return NULL;
 }
 
@@ -1873,8 +1882,8 @@ in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,
 	 * 2. wild (if lookupflags contains INPLOOKUP_WILDCARD).
 	 *
 	 * NOTE:
-	 * - Local group does not contain jailed sockets
-	 * - Local group does not contain IPv4 mapped INET6 wild sockets
+	 * - Load balanced group does not contain jailed sockets
+	 * - Load balanced does not contain IPv4 mapped INET6 wild sockets
 	 */
 	LIST_FOREACH(grp, hdr, il_list) {
 #ifdef INET6
@@ -2409,7 +2418,11 @@ in_pcbinshash_internal(struct inpcb *inp, int do_pcbgroup_update)
 	 */
 	so_options = inp_so_options(inp);
 	if(so_options & SO_REUSEPORT_LB) {
-		in_pcbinslbgrouphash(inp, pcbinfo);
+		int ret = in_pcbinslbgrouphash(inp, pcbinfo);
+		if(ret) {
+			// pcb lb group malloc fail (ret=ENOBUFS)
+			return ret;
+		}
 	}
 
 	/*
