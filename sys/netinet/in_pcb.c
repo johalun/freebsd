@@ -1883,7 +1883,7 @@ in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,
 	 *
 	 * NOTE:
 	 * - Load balanced group does not contain jailed sockets
-	 * - Load balanced does not contain IPv4 mapped INET6 wild sockets
+	 * - Load balanced group does not contain IPv4 mapped INET6 wild sockets
 	 */
 	LIST_FOREACH(grp, hdr, il_list) {
 #ifdef INET6
