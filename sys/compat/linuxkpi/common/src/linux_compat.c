@@ -1780,10 +1780,14 @@ linux_complete_common(struct completion *c, int all)
 
 	sleepq_lock(c);
 	c->done++;
-	if (all)
+	if (all) {
+		c->done = UINT_MAX;
 		wakeup_swapper = sleepq_broadcast(c, SLEEPQ_SLEEP, 0, 0);
-	else
+	} else {
+		if (c->done != UINT_MAX)
+			c->done++;
 		wakeup_swapper = sleepq_signal(c, SLEEPQ_SLEEP, 0, 0);
+	}
 	sleepq_release(c);
 	if (wakeup_swapper)
 		kick_proc0();
@@ -1892,14 +1896,17 @@ done:
 int
 linux_try_wait_for_completion(struct completion *c)
 {
+	if (!READ_ONCE(c->done))
+		return 0;
+
 	int isdone;
 
 	isdone = 1;
 	sleepq_lock(c);
-	if (c->done)
-		c->done--;
-	else
+	if (!c->done)
 		isdone = 0;
+	else if (c->done != UINT_MAX)
+		c->done--;
 	sleepq_release(c);
 	return (isdone);
 }
@@ -1907,6 +1914,9 @@ linux_try_wait_for_completion(struct completion *c)
 int
 linux_completion_done(struct completion *c)
 {
+	if (!READ_ONCE(c->done))
+		return 0;
+
 	int isdone;
 
 	isdone = 1;
