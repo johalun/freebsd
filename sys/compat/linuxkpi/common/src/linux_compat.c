@@ -1779,7 +1779,6 @@ linux_complete_common(struct completion *c, int all)
 	int wakeup_swapper;
 
 	sleepq_lock(c);
-	c->done++;
 	if (all) {
 		c->done = UINT_MAX;
 		wakeup_swapper = sleepq_broadcast(c, SLEEPQ_SLEEP, 0, 0);
@@ -1829,7 +1828,8 @@ linux_wait_for_common(struct completion *c, int flags)
 		} else
 			sleepq_wait(c, 0);
 	}
-	c->done--;
+	if (c->done != UINT_MAX)
+		c->done--;
 	sleepq_release(c);
 
 intr:
@@ -1882,7 +1882,8 @@ linux_wait_for_timeout_common(struct completion *c, int timeout, int flags)
 			goto done;
 		}
 	}
-	c->done--;
+	if (c->done != UINT_MAX)
+		c->done--;
 	sleepq_release(c);
 
 	/* return how many jiffies are left */
@@ -1896,16 +1897,11 @@ done:
 int
 linux_try_wait_for_completion(struct completion *c)
 {
-	if (!READ_ONCE(c->done))
-		return 0;
-
 	int isdone;
 
-	isdone = 1;
 	sleepq_lock(c);
-	if (!c->done)
-		isdone = 0;
-	else if (c->done != UINT_MAX)
+	isdone = (c->done != 0);
+	if (c->done != 0 && c->done != UINT_MAX)
 		c->done--;
 	sleepq_release(c);
 	return (isdone);
@@ -1914,15 +1910,10 @@ linux_try_wait_for_completion(struct completion *c)
 int
 linux_completion_done(struct completion *c)
 {
-	if (!READ_ONCE(c->done))
-		return 0;
-
 	int isdone;
 
-	isdone = 1;
 	sleepq_lock(c);
-	if (c->done == 0)
-		isdone = 0;
+	isdone = (c->done != 0);
 	sleepq_release(c);
 	return (isdone);
 }
