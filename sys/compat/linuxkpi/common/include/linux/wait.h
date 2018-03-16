@@ -47,13 +47,16 @@
 #define	might_sleep()							\
 	WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK, NULL, "might_sleep()")
 
-#define might_sleep_if(cond) do { if (cond) might_sleep(); } while (0)
+#define	might_sleep_if(cond) do { if (cond) might_sleep(); } while (0)
 
 struct wait_queue;
 struct wait_queue_head;
 
-typedef struct wait_queue wait_queue_t;
+typedef struct wait_queue wait_queue_t; /* < v4.13*/
+typedef struct wait_queue wait_queue_entry_t; /* >= v4.13 */
+
 typedef struct wait_queue_head wait_queue_head_t;
+
 
 typedef int wait_queue_func_t(wait_queue_t *, unsigned int, int, void *);
 
@@ -65,12 +68,23 @@ struct wait_queue {
 	unsigned int flags;	/* always 0 */
 	void *private;
 	wait_queue_func_t *func;
-	struct list_head task_list;
+	union {
+		/*
+		 * Changes in Linux v4.13.
+		 * Remove deprecated code when we
+		 * don't depend on < 4.13 any more.
+		 */
+		struct list_head task_list; /* < v.4.13 */
+		struct list_head entry; /* >= v4.13 */
+	};
 };
 
 struct wait_queue_head {
 	spinlock_t lock;
-	struct list_head task_list;
+	union {
+		struct list_head task_list; /* < v.4.13 */
+		struct list_head head; /* >= v4.13 */
+	};
 };
 
 /*
@@ -228,6 +242,13 @@ add_wait_queue(wait_queue_head_t *wqh, wait_queue_t *wq)
 
 static inline void
 __add_wait_queue_tail(wait_queue_head_t *wqh, wait_queue_t *wq)
+{
+	list_add_tail(&wq->task_list, &wqh->task_list);
+}
+
+/* Linux >= v4.13 */
+static inline void
+__add_wait_queue_entry_tail(wait_queue_head_t *wqh, wait_queue_t *wq)
 {
 	list_add_tail(&wq->task_list, &wqh->task_list);
 }
