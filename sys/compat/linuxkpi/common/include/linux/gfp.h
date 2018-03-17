@@ -49,6 +49,7 @@
 #define	__GFP_NORETRY	0
 #define	__GFP_RECLAIM   0
 #define	__GFP_RECLAIMABLE   0
+#define	__GFP_RETRY_MAYFAIL	0
 
 #define	__GFP_IO	0
 #define	__GFP_NO_KSWAPD	0
