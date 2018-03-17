@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2017 Dag-Erling Smørgrav
+ * Copyright (c) 2018 Netflix, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,9 +10,6 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 3. The name of the author may not be used to endorse or promote
- *    products derived from this software without specific prior written
- *    permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -25,29 +22,66 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
-#ifndef SYS_CRYPTO_CHACHA20_H_INCLUDED
-#define SYS_CRYPTO_CHACHA20_H_INCLUDED
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <stand.h>
+#include <efi.h>
+#include <efichar.h>
+#include <efilib.h>
 
-typedef struct {
-	uint32_t state[16];
-} chacha20_ctx;
+static EFI_GUID FreeBSDBootVarGUID = FREEBSD_BOOT_VAR_GUID;
+static EFI_GUID GlobalBootVarGUID = EFI_GLOBAL_VARIABLE;
 
-void chacha20_init(chacha20_ctx *, const uint8_t *, size_t);
-void chacha20_reset(chacha20_ctx *, const uint8_t *);
-size_t chacha20_encrypt(chacha20_ctx *, const void *, uint8_t *, size_t);
-size_t chacha20_decrypt(chacha20_ctx *, const uint8_t *, void *, size_t);
-void chacha20_finish(chacha20_ctx *);
+EFI_STATUS
+efi_getenv(EFI_GUID *g, const char *v, void *data, size_t *len)
+{
+	size_t ul;
+	CHAR16 *uv;
+	UINT32 attr;
+	UINTN dl;
+	EFI_STATUS rv;
 
-#ifdef __cplusplus
+	uv = NULL;
+	if (utf8_to_ucs2(v, &uv, &ul) != 0)
+		return (EFI_OUT_OF_RESOURCES);
+	dl = *len;
+	rv = RS->GetVariable(uv, g, &attr, &dl, data);
+	if (rv == EFI_SUCCESS)
+		*len = dl;
+	free(uv);
+	return (rv);
 }
-#endif
 
-#endif
+EFI_STATUS
+efi_global_getenv(const char *v, void *data, size_t *len)
+{
+
+	return (efi_getenv(&GlobalBootVarGUID, v, data, len));
+}
+
+EFI_STATUS
+efi_freebsd_getenv(const char *v, void *data, size_t *len)
+{
+
+	return (efi_getenv(&FreeBSDBootVarGUID, v, data, len));
+}
+
+EFI_STATUS
+efi_setenv_freebsd_wcs(const char *varname, CHAR16 *valstr)
+{
+	CHAR16 *var = NULL;
+	size_t len;
+	EFI_STATUS rv;
+
+	if (utf8_to_ucs2(varname, &var, &len) != 0)
+		return (EFI_OUT_OF_RESOURCES);
+	rv = RS->SetVariable(var, &FreeBSDBootVarGUID,
+	    EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+	    (ucs2len(valstr) + 1) * sizeof(efi_char), valstr);
+	free(var);
+	return (rv);
+}
+
