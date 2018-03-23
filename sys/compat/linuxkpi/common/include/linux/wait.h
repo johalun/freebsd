@@ -53,7 +53,9 @@ struct wait_queue;
 struct wait_queue_head;
 
 typedef struct wait_queue wait_queue_t; /* < v4.13*/
-typedef struct wait_queue wait_queue_entry_t; /* >= v4.13 */
+
+#define	wait_queue_entry wait_queue
+typedef struct wait_queue_entry wait_queue_entry_t; /* >= v4.13 */
 
 typedef struct wait_queue_head wait_queue_head_t;
 
@@ -122,7 +124,11 @@ extern wait_queue_func_t default_wake_function;
 	INIT_LIST_HEAD(&(wqh)->task_list);				\
 } while (0)
 
+void linux_init_wait_entry(wait_queue_t *wait, int flags);
 void linux_wake_up(wait_queue_head_t *, unsigned int, int, bool);
+
+#define	init_wait_entry(w, f)						\
+	linux_init_wait_entry(w, f)
 
 #define	wake_up(wqh)							\
 	linux_wake_up(wqh, TASK_NORMAL, 1, false)
