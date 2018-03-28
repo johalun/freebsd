@@ -38,14 +38,10 @@
 struct task_struct;
 
 struct ww_class {
-	const char *acquire_name;
 	const char *mutex_name;
 };
 
 struct ww_acquire_ctx {
-	struct task_struct *task;
-	unsigned long stamp;
-	unsigned acquired;
 };
 
 struct ww_mutex {
@@ -134,19 +130,19 @@ ww_mutex_destroy(struct ww_mutex *lock)
 static inline void
 ww_acquire_init(struct ww_acquire_ctx *ctx, struct ww_class *ww_class)
 {
-	UNIMPLEMENTED();
+	// NOP is deliberate
 }
 
 static inline void
 ww_acquire_fini(struct ww_acquire_ctx *ctx)
 {
-	UNIMPLEMENTED();
+	// NOP is deliberate
 }
 
 static inline void
 ww_acquire_done(struct ww_acquire_ctx *ctx)
 {
-	UNIMPLEMENTED();
+	// NOP is deliberate
 }
 
 #endif					/* _LINUX_WW_MUTEX_H_ */
