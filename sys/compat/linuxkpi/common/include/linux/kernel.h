@@ -372,6 +372,56 @@ kstrtou32(const char *cp, unsigned int base, u32 *res)
 	return (0);
 }
 
+static inline int
+kstrtobool(const char *s, bool *res)
+{
+	if (!s)
+		return -EINVAL;
+
+	switch (s[0]) {
+	case 'y':
+	case 'Y':
+	case '1':
+		*res = true;
+		return 0;
+	case 'n':
+	case 'N':
+	case '0':
+		*res = false;
+		return 0;
+	case 'o':
+	case 'O':
+		switch (s[1]) {
+		case 'n':
+		case 'N':
+			*res = true;
+			return 0;
+		case 'f':
+		case 'F':
+			*res = false;
+			return 0;
+		default:
+			break;
+		}
+	default:
+		break;
+	}
+
+	return -EINVAL;
+}
+
+static inline int
+kstrtobool_from_user(const char __user *s, size_t count, bool *res)
+{
+	char buf[4];
+
+	count = min(count, sizeof(buf) - 1);
+	if (copy_from_user(buf, s, count))
+		return -EFAULT;
+	buf[count] = '\0';
+	return kstrtobool(buf, res);
+}
+
 #define min(x, y)	((x) < (y) ? (x) : (y))
 #define max(x, y)	((x) > (y) ? (x) : (y))
 
