@@ -85,7 +85,7 @@
 #define	__PASTE(a,b) ___PASTE(a,b)
 
 #define	ACCESS_ONCE(x)			(*(volatile __typeof(x) *)&(x))
-  
+
 #define	WRITE_ONCE(x,v) do {		\
 	barrier();			\
 	ACCESS_ONCE(x) = (v);		\
