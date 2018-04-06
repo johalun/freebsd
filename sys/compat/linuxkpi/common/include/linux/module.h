@@ -77,9 +77,7 @@ _module_run(void *arg)
 		printf("Running %s (%p)\n", name, pc);
 #endif
 	fn = arg;
-	DROP_GIANT();
 	fn();
-	PICKUP_GIANT();
 }
 
 #define	module_init(fn)							\
