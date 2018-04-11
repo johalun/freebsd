@@ -88,7 +88,9 @@
 
 #define	BUILD_BUG()			do { CTASSERT(0); } while (0)
 #define	BUILD_BUG_ON(x)			CTASSERT(!(x))
+#ifndef BUILD_BUG_ON_MSG
 #define	BUILD_BUG_ON_MSG(x, msg)	BUILD_BUG_ON(x)
+#endif
 #define	BUILD_BUG_ON_NOT_POWER_OF_2(x)	BUILD_BUG_ON(!powerof2(x))
 #define	BUILD_BUG_ON_INVALID(expr)	while (0) { (void)(expr); }
 
