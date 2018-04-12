@@ -39,6 +39,8 @@
 
 struct timer_list {
 	struct callout callout;
+	// XXX: Changed arg to (struct timer_list *) in later Linux
+	// Also, expected function names are timer_setup, not setup_timer?
 	void    (*function) (unsigned long);
 	unsigned long data;
 	int expires;
@@ -51,7 +53,7 @@ extern unsigned long linux_timer_hz_mask;
 #define	setup_timer(timer, func, dat) do {				\
 	(timer)->function = (func);					\
 	(timer)->data = (dat);						\
-	callout_init(&(timer)->callout, 1);			\
+	callout_init(&(timer)->callout, 1);				\
 } while (0)
 
 #define	__setup_timer(timer, func, dat, flags) do {			\
@@ -62,7 +64,7 @@ extern unsigned long linux_timer_hz_mask;
 #define	init_timer(timer) do {						\
 	(timer)->function = NULL;					\
 	(timer)->data = 0;						\
-	callout_init(&(timer)->callout, 1);			\
+	callout_init(&(timer)->callout, 1);				\
 } while (0)
 
 extern void mod_timer(struct timer_list *, int);
@@ -77,5 +79,11 @@ extern void add_timer_on(struct timer_list *, int cpu);
 #define	round_jiffies_relative(j) round_jiffies(j)
 #define	round_jiffies_up(j)	round_jiffies(j)
 #define	round_jiffies_up_relative(j) round_jiffies_up(j)
+
+#define	from_timer(var, cb, field)		\
+	container_of(cb, typeof(*var), field)
+
+#define timer_setup(timer, func, flags)					\
+	__setup_timer((timer), ((void(*)(unsigned long))(func)), 0, (flags))
 
 #endif					/* _LINUX_TIMER_H_ */

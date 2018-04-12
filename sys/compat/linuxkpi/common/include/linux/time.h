@@ -35,6 +35,8 @@
 #include <sys/time.h>
 #include <sys/stdint.h>
 
+#define	timespec64	timespec
+
 static inline struct timeval
 ns_to_timeval(const int64_t nsec)
 {
