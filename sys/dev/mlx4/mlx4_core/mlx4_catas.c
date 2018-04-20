@@ -226,9 +226,9 @@ static void dump_err_buf(struct mlx4_dev *dev)
 			 i, swab32(readl(priv->catas_err.map + i)));
 }
 
-static void poll_catas(unsigned long dev_ptr)
+static void poll_catas(struct timer_list *list)
 {
-	struct mlx4_dev *dev = (struct mlx4_dev *) dev_ptr;
+	struct mlx4_dev *dev = (struct mlx4_dev *) (list->data);
 	struct mlx4_priv *priv = mlx4_priv(dev);
 	u32 slave_read;
 

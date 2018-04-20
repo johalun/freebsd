@@ -448,9 +448,9 @@ static void print_health_info(struct mlx5_core_dev *dev)
 	printf("mlx5_core: INFO: ""raw fw_ver 0x%08x\n", fw);
 }
 
-static void poll_health(unsigned long data)
+static void poll_health(struct timer_list *list)
 {
-	struct mlx5_core_dev *dev = (struct mlx5_core_dev *)data;
+	struct mlx5_core_dev *dev = (struct mlx5_core_dev *)(list->data);
 	struct mlx5_core_health *health = &dev->priv.health;
 	u32 fatal_error;
 	u32 count;
@@ -497,7 +497,8 @@ void mlx5_start_health_poll(struct mlx5_core_dev *dev)
 	health->health = &dev->iseg->health;
 	health->health_counter = &dev->iseg->health_counter;
 
-	setup_timer(&health->timer, poll_health, (unsigned long)dev);
+	health->timer.function = poll_health;
+	health->timer.data = (unsigned long)dev;
 	mod_timer(&health->timer,
 		  round_jiffies(jiffies + MLX5_HEALTH_POLL_INTERVAL));
 }
