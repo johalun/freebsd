@@ -6,13 +6,15 @@ struct mm_struct;
 static inline void
 use_mm(struct mm_struct *mm)
 {
-	UNIMPLEMENTED();
+
+	printf("%s: missing implementation!\n", __func__);
 }
 
 static inline void
 unuse_mm(struct mm_struct *mm)
 {
-	UNIMPLEMENTED();	
+
+	printf("%s: missing implementation!\n", __func__);
 }
 
 #endif
