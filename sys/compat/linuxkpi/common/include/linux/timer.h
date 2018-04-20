@@ -73,4 +73,12 @@ extern void add_timer_on(struct timer_list *, int cpu);
 #define timer_setup(timer, func, flags)		\
 	__timer_setup((timer), (func))
 
+// Deprecated in Linux
+
+#define	init_timer(timer) do {						\
+	(timer)->function = NULL;					\
+	(timer)->data = 0;						\
+	callout_init(&(timer)->callout, 1);				\
+} while (0)
+
 #endif					/* _LINUX_TIMER_H_ */
