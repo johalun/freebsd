@@ -1956,9 +1956,27 @@ tcp_close(struct tcpcb *tp)
 {
 	struct inpcb *inp = tp->t_inpcb;
 	struct socket *so;
+	struct inpcb *inp_inh = NULL;
+	int is_listening = tp->t_state & TCPS_LISTEN;
 
 	INP_INFO_LOCK_ASSERT(&V_tcbinfo);
 	INP_WLOCK_ASSERT(inp);
+
+	if (is_listening) {
+		/*
+		 * Pending socket/syncache inheritance.
+		 *
+		 * If this is a listen(2) socket, find another listen(2) socket
+		 * in the same load balance group, which could inherit the
+		 * syncache and sockets pending on the completion and
+		 * incompletion queues.
+		 *
+		 * NOTE:
+		 * Currently the inheritance could only happen on the listen(2)
+		 * sockets with SO_REUSEPORT_LB set.
+		 */
+		inp_inh = in_pcblookup_lbgroup_last(inp);
+	}
 
 #ifdef TCP_OFFLOAD
 	if (tp->t_state == TCPS_LISTEN)
@@ -1980,6 +1998,15 @@ tcp_close(struct tcpcb *tp)
 	KASSERT(inp->inp_socket != NULL, ("tcp_close: inp_socket NULL"));
 	so = inp->inp_socket;
 	soisdisconnected(so);
+
+	if (is_listening && inp_inh != NULL) {
+		INP_WLOCK(inp_inh);
+		if (inp_inh->inp_socket != NULL) {
+			soinherit(so, inp_inh->inp_socket);
+		}
+		INP_WUNLOCK(inp_inh);
+	}
+
 	if (inp->inp_flags & INP_SOCKREF) {
 		KASSERT(so->so_state & SS_PROTOREF,
 		    ("tcp_close: !SS_PROTOREF"));
